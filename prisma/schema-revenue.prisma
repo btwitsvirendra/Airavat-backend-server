@@ -1,0 +1,391 @@
+// =============================================================================
+// AIRAVAT B2B MARKETPLACE - REVENUE SCHEMA
+// Models for commission, subscriptions, advertising, and leads
+// =============================================================================
+
+// =============================================================================
+// COMMISSION & PAYOUTS
+// =============================================================================
+
+model CommissionRate {
+  id           String    @id @default(uuid())
+  categoryCode String    @unique
+  rate         Decimal   @db.Decimal(5, 2)
+  isActive     Boolean   @default(true)
+  createdBy    String?
+  updatedBy    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("commission_rates")
+}
+
+model CommissionOverride {
+  id           String    @id @default(uuid())
+  businessId   String
+  categoryCode String    @default("DEFAULT")
+  rate         Decimal   @db.Decimal(5, 2)
+  validUntil   DateTime?
+  reason       String?
+  isActive     Boolean   @default(true)
+  createdBy    String?
+  createdAt    DateTime  @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@map("commission_overrides")
+}
+
+model CommissionRecord {
+  id                String    @id @default(uuid())
+  orderId           String    @unique
+  sellerId          String
+  buyerId           String
+  orderAmount       Decimal   @db.Decimal(15, 2)
+  commissionRate    Decimal   @db.Decimal(5, 2)
+  commissionAmount  Decimal   @db.Decimal(15, 2)
+  commissionGst     Decimal   @db.Decimal(15, 2)
+  paymentFee        Decimal   @db.Decimal(15, 2)
+  paymentFeeGst     Decimal   @db.Decimal(15, 2)
+  totalPlatformFees Decimal   @db.Decimal(15, 2)
+  sellerPayout      Decimal   @db.Decimal(15, 2)
+  currency          String    @default("INR")
+  status            String    @default("PENDING") // PENDING, PROCESSING, PAID, DISPUTED
+  payoutRequestId   String?
+  paidAt            DateTime?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+
+  order         Order          @relation(fields: [orderId], references: [id])
+  seller        Business       @relation("SellerCommissions", fields: [sellerId], references: [id])
+  payoutRequest PayoutRequest? @relation(fields: [payoutRequestId], references: [id])
+
+  @@index([sellerId])
+  @@index([status])
+  @@map("commission_records")
+}
+
+model PayoutRequest {
+  id            String    @id @default(uuid())
+  payoutNumber  String    @unique
+  sellerId      String
+  amount        Decimal   @db.Decimal(15, 2)
+  currency      String    @default("INR")
+  status        String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  bankAccountId String?
+  transactionId String?
+  failureReason String?
+  processedAt   DateTime?
+  processedBy   String?
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+
+  seller            Business           @relation(fields: [sellerId], references: [id])
+  commissionRecords CommissionRecord[]
+
+  @@index([sellerId])
+  @@index([status])
+  @@map("payout_requests")
+}
+
+// =============================================================================
+// SUBSCRIPTIONS & BILLING
+// =============================================================================
+
+model BusinessSubscription {
+  id                  String    @id @default(uuid())
+  businessId          String    @unique
+  planId              String
+  status              String    @default("ACTIVE") // TRIAL, ACTIVE, PAUSED, CANCELLED, EXPIRED
+  billingCycle        String    @default("MONTHLY") // MONTHLY, ANNUAL
+  price               Decimal   @db.Decimal(10, 2)
+  currency            String    @default("INR")
+  currentPeriodStart  DateTime
+  currentPeriodEnd    DateTime
+  trialEnd            DateTime?
+  cancelledAt         DateTime?
+  cancelAtPeriodEnd   Boolean   @default(false)
+  cancellationReason  String?
+  cancellationFeedback String?
+  scheduledPlanId     String?
+  scheduledChangeAt   DateTime?
+  previousPlanId      String?
+  upgradedAt          DateTime?
+  paymentMethodId     String?
+  couponCode          String?
+  discountAmount      Decimal?  @db.Decimal(10, 2)
+  metadata            Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  business       Business        @relation(fields: [businessId], references: [id])
+  billingRecords BillingRecord[]
+
+  @@map("business_subscriptions")
+}
+
+model BillingRecord {
+  id             String   @id @default(uuid())
+  businessId     String
+  subscriptionId String?
+  amount         Decimal  @db.Decimal(10, 2)
+  currency       String   @default("INR")
+  type           String   // SUBSCRIPTION, UPGRADE, ADDON, LEAD_PACKAGE, AD_CREDIT
+  status         String   @default("PENDING") // PENDING, PAID, FAILED, REFUNDED
+  description    String?
+  invoiceId      String?
+  paymentId      String?
+  dueDate        DateTime
+  paidAt         DateTime?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  business     Business              @relation(fields: [businessId], references: [id])
+  subscription BusinessSubscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@index([businessId])
+  @@index([status])
+  @@map("billing_records")
+}
+
+model SubscriptionCoupon {
+  id              String    @id @default(uuid())
+  code            String    @unique
+  description     String?
+  discountType    String    // PERCENTAGE, FIXED
+  discountValue   Decimal   @db.Decimal(10, 2)
+  maxDiscount     Decimal?  @db.Decimal(10, 2)
+  applicablePlans String[]
+  usageLimit      Int?
+  usageCount      Int       @default(0)
+  validFrom       DateTime  @default(now())
+  validUntil      DateTime?
+  isActive        Boolean   @default(true)
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+
+  @@map("subscription_coupons")
+}
+
+// =============================================================================
+// ADVERTISING
+// =============================================================================
+
+model AdCampaign {
+  id                String    @id @default(uuid())
+  campaignNumber    String    @unique
+  businessId        String
+  name              String
+  type              String    @default("SPONSORED_PRODUCT") // SPONSORED_PRODUCT, BANNER, SELLER_FEATURED
+  objective         String    @default("CLICKS") // CLICKS, IMPRESSIONS, CONVERSIONS
+  placements        String[]
+  targetingCriteria Json?
+  budget            Decimal   @db.Decimal(12, 2)
+  dailyBudget       Decimal   @db.Decimal(12, 2)
+  spentAmount       Decimal   @db.Decimal(12, 2) @default(0)
+  biddingStrategy   String    @default("MANUAL_CPC")
+  bidAmount         Decimal   @db.Decimal(8, 2)
+  startDate         DateTime
+  endDate           DateTime?
+  status            String    @default("DRAFT") // DRAFT, PENDING_REVIEW, ACTIVE, PAUSED, COMPLETED, REJECTED, CANCELLED
+  submittedAt       DateTime?
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  rejectionReason   String?
+  pausedAt          DateTime?
+  impressions       Int       @default(0)
+  clicks            Int       @default(0)
+  conversions       Int       @default(0)
+  conversionValue   Decimal   @db.Decimal(12, 2) @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  business   Business      @relation(fields: [businessId], references: [id])
+  adGroups   AdGroup[]
+  adClicks   AdClick[]
+  impressionRecords AdImpression[]
+
+  @@index([businessId])
+  @@index([status])
+  @@map("ad_campaigns")
+}
+
+model AdGroup {
+  id          String   @id @default(uuid())
+  campaignId  String
+  name        String
+  productIds  String[]
+  categoryIds String[]
+  keywords    String[]
+  status      String   @default("ACTIVE")
+  bidModifier Decimal  @db.Decimal(4, 2) @default(1.00)
+  createdAt   DateTime @default(now())
+
+  campaign    AdCampaign     @relation(fields: [campaignId], references: [id])
+  products    Product[]      @relation("AdGroupProducts")
+  clicks      AdClick[]
+  impressions AdImpression[]
+
+  @@index([campaignId])
+  @@map("ad_groups")
+}
+
+model AdImpression {
+  id         String   @id @default(uuid())
+  campaignId String
+  adGroupId  String?
+  productId  String?
+  placement  String
+  userId     String?
+  position   Int      @default(1)
+  createdAt  DateTime @default(now())
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id])
+  adGroup  AdGroup?   @relation(fields: [adGroupId], references: [id])
+
+  @@index([campaignId])
+  @@index([createdAt])
+  @@map("ad_impressions")
+}
+
+model AdClick {
+  id              String    @id @default(uuid())
+  campaignId      String
+  adGroupId       String?
+  productId       String
+  placement       String
+  cpc             Decimal   @db.Decimal(8, 2)
+  userId          String?
+  sessionId       String?
+  source          String?
+  converted       Boolean   @default(false)
+  conversionValue Decimal?  @db.Decimal(12, 2)
+  orderId         String?
+  convertedAt     DateTime?
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id])
+  adGroup  AdGroup?   @relation(fields: [adGroupId], references: [id])
+
+  @@index([campaignId])
+  @@index([productId])
+  @@index([createdAt])
+  @@map("ad_clicks")
+}
+
+// =============================================================================
+// LEAD GENERATION
+// =============================================================================
+
+model Lead {
+  id               String    @id @default(uuid())
+  leadNumber       String    @unique
+  buyerId          String
+  buyerBusinessId  String?
+  sellerId         String?   // Null until claimed
+  source           String
+  productId        String?
+  categoryId       String?
+  inquiryDetails   String?
+  contactInfo      Json?
+  intentSignals    String[]
+  score            Int       @default(0)
+  quality          String    @default("COLD") // HOT, WARM, COLD
+  status           String    @default("NEW") // NEW, CLAIMED, CONTACTED, QUALIFIED, CONVERTED, LOST
+  notes            String?
+  followUpDate     DateTime?
+  isVerified       Boolean   @default(false)
+  claimedAt        DateTime?
+  creditPurchaseId String?
+  lastActivityAt   DateTime
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  buyer         User           @relation("LeadBuyer", fields: [buyerId], references: [id])
+  buyerBusiness Business?      @relation("LeadBuyerBusiness", fields: [buyerBusinessId], references: [id])
+  seller        Business?      @relation("LeadSeller", fields: [sellerId], references: [id])
+  product       Product?       @relation(fields: [productId], references: [id])
+  category      Category?      @relation(fields: [categoryId], references: [id])
+  activities    LeadActivity[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+  @@index([quality])
+  @@map("leads")
+}
+
+model LeadActivity {
+  id        String   @id @default(uuid())
+  leadId    String
+  action    String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id])
+
+  @@index([leadId])
+  @@map("lead_activities")
+}
+
+model IntentSignal {
+  id         String   @id @default(uuid())
+  buyerId    String
+  signal     String
+  weight     Int
+  productId  String?
+  categoryId String?
+  sellerId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  buyer User @relation(fields: [buyerId], references: [id])
+
+  @@index([buyerId])
+  @@index([createdAt])
+  @@map("intent_signals")
+}
+
+model LeadCreditPurchase {
+  id               String   @id @default(uuid())
+  businessId       String
+  packageId        String
+  packageName      String
+  creditsTotal     Int
+  creditsRemaining Int
+  amountPaid       Decimal  @db.Decimal(10, 2)
+  currency         String   @default("INR")
+  validUntil       DateTime
+  filters          Json?    // Category and region filters
+  status           String   @default("ACTIVE") // ACTIVE, EXPIRED, CANCELLED
+  createdAt        DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@index([status])
+  @@map("lead_credit_purchases")
+}
+
+// =============================================================================
+// PLATFORM REVENUE TRACKING
+// =============================================================================
+
+model PlatformRevenue {
+  id           String   @id @default(uuid())
+  date         DateTime @db.Date
+  type         String   // COMMISSION, SUBSCRIPTION, ADVERTISING, LEADS, OTHER
+  amount       Decimal  @db.Decimal(15, 2)
+  transactions Int      @default(0)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@unique([date, type])
+  @@index([date])
+  @@map("platform_revenue")
+}
+
+
+

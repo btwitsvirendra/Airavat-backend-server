@@ -1,0 +1,695 @@
+// =============================================================================
+// AIRAVAT B2B MARKETPLACE - V2 SCHEMA ADDITIONS
+// Additional models for Phase 2 features
+// =============================================================================
+// NOTE: These models should be added to the main schema.prisma file
+// This file serves as documentation and reference for the V2 additions
+
+// =============================================================================
+// WISHLIST
+// =============================================================================
+
+model Wishlist {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  notes       String?
+  priority    Int      @default(0)
+  notifyOnPriceDrop Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([businessId])
+  @@index([productId])
+  @@map("wishlists")
+}
+
+// =============================================================================
+// PRICE ALERTS
+// =============================================================================
+
+model PriceAlert {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  targetPrice   Decimal         @db.Decimal(12, 2)
+  alertType     AlertType       @default(PRICE_DROP)
+  status        AlertStatus     @default(ACTIVE)
+  currentPrice  Decimal?        @db.Decimal(12, 2)
+  triggeredAt   DateTime?
+  notifiedAt    DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([productId])
+  @@index([status])
+  @@map("price_alerts")
+}
+
+enum AlertType {
+  PRICE_DROP
+  PRICE_THRESHOLD
+  BACK_IN_STOCK
+  PRICE_MATCH
+}
+
+enum AlertStatus {
+  ACTIVE
+  TRIGGERED
+  EXPIRED
+  CANCELLED
+}
+
+// =============================================================================
+// ORDER TEMPLATES
+// =============================================================================
+
+model OrderTemplate {
+  id            String              @id @default(cuid())
+  userId        String
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId    String
+  business      Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  isDefault     Boolean             @default(false)
+  lastUsedAt    DateTime?
+  usageCount    Int                 @default(0)
+  items         OrderTemplateItem[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([businessId])
+  @@map("order_templates")
+}
+
+model OrderTemplateItem {
+  id              String        @id @default(cuid())
+  templateId      String
+  template        OrderTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  quantity        Int
+  specifications  Json?
+  notes           String?
+  createdAt       DateTime      @default(now())
+
+  @@index([templateId])
+  @@map("order_template_items")
+}
+
+// =============================================================================
+// QUICK ORDERS
+// =============================================================================
+
+model QuickOrder {
+  id            String           @id @default(cuid())
+  orderNumber   String           @unique
+  userId        String
+  user          User             @relation(fields: [userId], references: [id])
+  businessId    String
+  business      Business         @relation(fields: [businessId], references: [id])
+  templateId    String?
+  template      OrderTemplate?   @relation(fields: [templateId], references: [id])
+  sourceOrderId String?
+  sourceOrder   Order?           @relation("SourceOrder", fields: [sourceOrderId], references: [id])
+  items         QuickOrderItem[]
+  subtotal      Decimal          @db.Decimal(12, 2)
+  tax           Decimal          @db.Decimal(12, 2)
+  total         Decimal          @db.Decimal(12, 2)
+  status        QuickOrderStatus @default(DRAFT)
+  notes         String?
+  convertedOrderId String?       @unique
+  convertedOrder   Order?        @relation("ConvertedOrder", fields: [convertedOrderId], references: [id])
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([businessId])
+  @@index([status])
+  @@map("quick_orders")
+}
+
+model QuickOrderItem {
+  id          String     @id @default(cuid())
+  quickOrderId String
+  quickOrder  QuickOrder @relation(fields: [quickOrderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product    @relation(fields: [productId], references: [id])
+  quantity    Int
+  unitPrice   Decimal    @db.Decimal(12, 2)
+  totalPrice  Decimal    @db.Decimal(12, 2)
+  createdAt   DateTime   @default(now())
+
+  @@index([quickOrderId])
+  @@map("quick_order_items")
+}
+
+enum QuickOrderStatus {
+  DRAFT
+  VALIDATED
+  CONVERTED
+  CANCELLED
+}
+
+// =============================================================================
+// SAMPLE ORDERS
+// =============================================================================
+
+model SampleOrder {
+  id              String            @id @default(cuid())
+  sampleNumber    String            @unique
+  userId          String
+  user            User              @relation(fields: [userId], references: [id])
+  businessId      String
+  business        Business          @relation(fields: [businessId], references: [id])
+  sellerId        String
+  seller          Business          @relation("SellerSamples", fields: [sellerId], references: [id])
+  productId       String
+  product         Product           @relation(fields: [productId], references: [id])
+  quantity        Int
+  purpose         SamplePurpose     @default(QUALITY_CHECK)
+  status          SampleOrderStatus @default(REQUESTED)
+  shippingAddress Json
+  trackingNumber  String?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  feedback        String?
+  rating          Int?
+  followUpOrderId String?
+  expiresAt       DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([businessId])
+  @@index([sellerId])
+  @@index([status])
+  @@map("sample_orders")
+}
+
+enum SamplePurpose {
+  QUALITY_CHECK
+  PRODUCT_TESTING
+  CERTIFICATION
+  CUSTOMER_DEMO
+  OTHER
+}
+
+enum SampleOrderStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  SHIPPED
+  DELIVERED
+  FEEDBACK_PENDING
+  COMPLETED
+  CANCELLED
+}
+
+// =============================================================================
+// AUCTIONS
+// =============================================================================
+
+model Auction {
+  id              String        @id @default(cuid())
+  auctionNumber   String        @unique
+  sellerId        String
+  seller          Business      @relation(fields: [sellerId], references: [id])
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  title           String
+  description     String?
+  quantity        Int
+  unit            String        @default("pcs")
+  startingPrice   Decimal       @db.Decimal(12, 2)
+  reservePrice    Decimal?      @db.Decimal(12, 2)
+  currentPrice    Decimal?      @db.Decimal(12, 2)
+  buyNowPrice     Decimal?      @db.Decimal(12, 2)
+  minBidIncrement Decimal       @db.Decimal(12, 2) @default(100)
+  status          AuctionStatus @default(DRAFT)
+  startTime       DateTime
+  endTime         DateTime
+  extensionMinutes Int          @default(5)
+  autoExtend      Boolean       @default(true)
+  winningBidId    String?       @unique
+  winningBid      Bid?          @relation("WinningBid", fields: [winningBidId], references: [id])
+  bids            Bid[]         @relation("AuctionBids")
+  bidCount        Int           @default(0)
+  viewCount       Int           @default(0)
+  watcherCount    Int           @default(0)
+  terms           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([sellerId])
+  @@index([productId])
+  @@index([status])
+  @@index([endTime])
+  @@map("auctions")
+}
+
+model Bid {
+  id          String    @id @default(cuid())
+  auctionId   String
+  auction     Auction   @relation("AuctionBids", fields: [auctionId], references: [id], onDelete: Cascade)
+  bidderId    String
+  bidder      Business  @relation(fields: [bidderId], references: [id])
+  amount      Decimal   @db.Decimal(12, 2)
+  maxBid      Decimal?  @db.Decimal(12, 2)
+  isAutoBid   Boolean   @default(false)
+  isWinning   Boolean   @default(false)
+  isRetracted Boolean   @default(false)
+  retractedAt DateTime?
+  createdAt   DateTime  @default(now())
+  
+  winningAuction Auction? @relation("WinningBid")
+
+  @@index([auctionId])
+  @@index([bidderId])
+  @@index([isWinning])
+  @@map("bids")
+}
+
+enum AuctionStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  EXTENDED
+  ENDED
+  SOLD
+  CANCELLED
+  NO_BIDS
+}
+
+// =============================================================================
+// CONTRACTS
+// =============================================================================
+
+model Contract {
+  id              String          @id @default(cuid())
+  contractNumber  String          @unique
+  buyerId         String
+  buyer           Business        @relation("BuyerContracts", fields: [buyerId], references: [id])
+  sellerId        String
+  seller          Business        @relation("SellerContracts", fields: [sellerId], references: [id])
+  title           String
+  description     String?
+  type            ContractType    @default(SUPPLY_AGREEMENT)
+  status          ContractStatus  @default(DRAFT)
+  startDate       DateTime
+  endDate         DateTime
+  autoRenew       Boolean         @default(false)
+  renewalTermDays Int?
+  terms           Json
+  pricing         Json
+  deliveryTerms   Json?
+  paymentTerms    Json?
+  penalties       Json?
+  totalValue      Decimal?        @db.Decimal(15, 2)
+  minOrderValue   Decimal?        @db.Decimal(12, 2)
+  maxOrderValue   Decimal?        @db.Decimal(15, 2)
+  signedByBuyer   Boolean         @default(false)
+  signedBySeller  Boolean         @default(false)
+  buyerSignedAt   DateTime?
+  sellerSignedAt  DateTime?
+  activatedAt     DateTime?
+  terminatedAt    DateTime?
+  terminationReason String?
+  documents       Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+  @@index([endDate])
+  @@map("contracts")
+}
+
+enum ContractType {
+  SUPPLY_AGREEMENT
+  EXCLUSIVE_DISTRIBUTION
+  FRAMEWORK_AGREEMENT
+  ANNUAL_PURCHASE
+  CONSIGNMENT
+  SERVICE_LEVEL
+}
+
+enum ContractStatus {
+  DRAFT
+  PENDING_APPROVAL
+  NEGOTIATION
+  PENDING_SIGNATURE
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  TERMINATED
+  RENEWED
+}
+
+// =============================================================================
+// APPROVAL WORKFLOWS
+// =============================================================================
+
+model ApprovalRequest {
+  id              String           @id @default(cuid())
+  requestNumber   String           @unique
+  businessId      String
+  business        Business         @relation(fields: [businessId], references: [id])
+  requesterId     String
+  requester       User             @relation("ApprovalRequester", fields: [requesterId], references: [id])
+  type            ApprovalType
+  referenceId     String
+  referenceType   String
+  title           String
+  description     String?
+  amount          Decimal?         @db.Decimal(15, 2)
+  priority        ApprovalPriority @default(NORMAL)
+  status          ApprovalStatus   @default(PENDING)
+  currentLevel    Int              @default(1)
+  maxLevel        Int              @default(1)
+  approvers       ApprovalStep[]
+  dueDate         DateTime?
+  metadata        Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([businessId])
+  @@index([requesterId])
+  @@index([status])
+  @@index([type])
+  @@map("approval_requests")
+}
+
+model ApprovalStep {
+  id          String          @id @default(cuid())
+  requestId   String
+  request     ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  level       Int
+  approverId  String
+  approver    User            @relation("ApprovalApprover", fields: [approverId], references: [id])
+  status      StepStatus      @default(PENDING)
+  decision    String?
+  comments    String?
+  decidedAt   DateTime?
+  createdAt   DateTime        @default(now())
+
+  @@index([requestId])
+  @@index([approverId])
+  @@map("approval_steps")
+}
+
+enum ApprovalType {
+  ORDER
+  PURCHASE_ORDER
+  QUOTATION
+  CONTRACT
+  PAYMENT
+  REFUND
+  CREDIT_REQUEST
+  VENDOR_ONBOARD
+  PRICE_CHANGE
+  DISCOUNT
+}
+
+enum ApprovalPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ApprovalStatus {
+  PENDING
+  IN_PROGRESS
+  APPROVED
+  REJECTED
+  CANCELLED
+  ESCALATED
+}
+
+enum StepStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SKIPPED
+}
+
+// =============================================================================
+// REFERRAL PROGRAM
+// =============================================================================
+
+model Referral {
+  id              String         @id @default(cuid())
+  referrerId      String
+  referrer        User           @relation("Referrer", fields: [referrerId], references: [id])
+  referrerBusinessId String
+  referrerBusiness   Business    @relation("ReferrerBusiness", fields: [referrerBusinessId], references: [id])
+  referredEmail   String
+  referredUserId  String?
+  referredUser    User?          @relation("ReferredUser", fields: [referredUserId], references: [id])
+  referredBusinessId String?
+  referredBusiness   Business?   @relation("ReferredBusiness", fields: [referredBusinessId], references: [id])
+  referralCode    String         @unique
+  status          ReferralStatus @default(PENDING)
+  signedUpAt      DateTime?
+  qualifiedAt     DateTime?
+  rewardedAt      DateTime?
+  referrerReward  Decimal?       @db.Decimal(12, 2)
+  referredReward  Decimal?       @db.Decimal(12, 2)
+  qualifyingOrderId String?
+  qualifyingOrderValue Decimal?  @db.Decimal(12, 2)
+  expiresAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([referrerId])
+  @@index([referredEmail])
+  @@index([referralCode])
+  @@index([status])
+  @@map("referrals")
+}
+
+enum ReferralStatus {
+  PENDING
+  SIGNED_UP
+  QUALIFIED
+  REWARDED
+  EXPIRED
+  INVALID
+}
+
+// =============================================================================
+// LOYALTY PROGRAM
+// =============================================================================
+
+model LoyaltyProgram {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  isActive        Boolean  @default(true)
+  pointsPerSpend  Decimal  @db.Decimal(5, 2) @default(1)
+  pointValue      Decimal  @db.Decimal(5, 4) @default(0.01)
+  minRedemption   Int      @default(100)
+  maxRedemptionPercent Int @default(50)
+  tiers           Json
+  bonusRules      Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members         UserLoyalty[]
+
+  @@map("loyalty_programs")
+}
+
+model UserLoyalty {
+  id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId      String
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  programId       String
+  program         LoyaltyProgram @relation(fields: [programId], references: [id])
+  points          Int            @default(0)
+  lifetimePoints  Int            @default(0)
+  tier            String         @default("BRONZE")
+  tierExpiresAt   DateTime?
+  nextTierPoints  Int?
+  pointsToExpire  Int            @default(0)
+  expiryDate      DateTime?
+  lastActivityAt  DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  events          LoyaltyEvent[]
+
+  @@unique([userId, programId])
+  @@index([businessId])
+  @@index([tier])
+  @@map("user_loyalty")
+}
+
+model LoyaltyEvent {
+  id              String       @id @default(cuid())
+  userLoyaltyId   String
+  userLoyalty     UserLoyalty  @relation(fields: [userLoyaltyId], references: [id], onDelete: Cascade)
+  type            LoyaltyEventType
+  points          Int
+  description     String
+  referenceType   String?
+  referenceId     String?
+  metadata        Json?
+  expiresAt       DateTime?
+  createdAt       DateTime     @default(now())
+
+  @@index([userLoyaltyId])
+  @@index([type])
+  @@map("loyalty_events")
+}
+
+enum LoyaltyEventType {
+  EARN_PURCHASE
+  EARN_BONUS
+  EARN_REFERRAL
+  EARN_REVIEW
+  EARN_BIRTHDAY
+  EARN_ANNIVERSARY
+  REDEEM
+  EXPIRE
+  ADJUST
+  TIER_UPGRADE
+  TIER_DOWNGRADE
+}
+
+// =============================================================================
+// TRADE ASSURANCE
+// =============================================================================
+
+model TradeAssurance {
+  id              String               @id @default(cuid())
+  orderId         String               @unique
+  order           Order                @relation(fields: [orderId], references: [id])
+  buyerId         String
+  buyer           Business             @relation("BuyerAssurance", fields: [buyerId], references: [id])
+  sellerId        String
+  seller          Business             @relation("SellerAssurance", fields: [sellerId], references: [id])
+  coverageAmount  Decimal              @db.Decimal(15, 2)
+  premiumAmount   Decimal              @db.Decimal(12, 2)
+  premiumRate     Decimal              @db.Decimal(5, 4)
+  status          TradeAssuranceStatus @default(PENDING)
+  coverageType    CoverageType         @default(STANDARD)
+  terms           Json
+  validFrom       DateTime?
+  validUntil      DateTime?
+  activatedAt     DateTime?
+  claimId         String?
+  claimStatus     ClaimStatus?
+  claimAmount     Decimal?             @db.Decimal(15, 2)
+  claimReason     String?
+  claimFiledAt    DateTime?
+  claimResolvedAt DateTime?
+  resolution      String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([orderId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+  @@map("trade_assurances")
+}
+
+enum TradeAssuranceStatus {
+  PENDING
+  ACTIVE
+  CLAIMED
+  RESOLVED
+  EXPIRED
+  CANCELLED
+}
+
+enum CoverageType {
+  STANDARD
+  EXTENDED
+  PREMIUM
+  CUSTOM
+}
+
+enum ClaimStatus {
+  FILED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  PAID
+  DISPUTED
+}
+
+// =============================================================================
+// VENDOR SCORECARDS
+// =============================================================================
+
+model VendorScorecard {
+  id                  String   @id @default(cuid())
+  vendorId            String   @unique
+  vendor              Business @relation(fields: [vendorId], references: [id])
+  overallScore        Decimal  @db.Decimal(4, 2) @default(0)
+  qualityScore        Decimal  @db.Decimal(4, 2) @default(0)
+  deliveryScore       Decimal  @db.Decimal(4, 2) @default(0)
+  communicationScore  Decimal  @db.Decimal(4, 2) @default(0)
+  pricingScore        Decimal  @db.Decimal(4, 2) @default(0)
+  complianceScore     Decimal  @db.Decimal(4, 2) @default(0)
+  totalOrders         Int      @default(0)
+  completedOrders     Int      @default(0)
+  cancelledOrders     Int      @default(0)
+  lateDeliveries      Int      @default(0)
+  disputeCount        Int      @default(0)
+  avgResponseTime     Int?     // in minutes
+  avgDeliveryTime     Int?     // in hours
+  returnRate          Decimal  @db.Decimal(5, 2) @default(0)
+  repeatBuyerRate     Decimal  @db.Decimal(5, 2) @default(0)
+  certifications      Json?
+  badges              Json?
+  lastCalculatedAt    DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  history             ScorecardHistory[]
+
+  @@index([overallScore])
+  @@map("vendor_scorecards")
+}
+
+model ScorecardHistory {
+  id              String          @id @default(cuid())
+  scorecardId     String
+  scorecard       VendorScorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  period          String          // e.g., "2024-01", "2024-Q1"
+  overallScore    Decimal         @db.Decimal(4, 2)
+  qualityScore    Decimal         @db.Decimal(4, 2)
+  deliveryScore   Decimal         @db.Decimal(4, 2)
+  communicationScore Decimal      @db.Decimal(4, 2)
+  pricingScore    Decimal         @db.Decimal(4, 2)
+  complianceScore Decimal         @db.Decimal(4, 2)
+  orderCount      Int
+  metrics         Json?
+  createdAt       DateTime        @default(now())
+
+  @@unique([scorecardId, period])
+  @@index([scorecardId])
+  @@map("scorecard_history")
+}
+
+
+

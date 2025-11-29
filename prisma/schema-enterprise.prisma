@@ -1,0 +1,274 @@
+// =============================================================================
+// AIRAVAT B2B MARKETPLACE - ENTERPRISE SCHEMA
+// Models for multi-tenancy, webhooks, API marketplace, localizations
+// =============================================================================
+
+// =============================================================================
+// MULTI-TENANCY
+// =============================================================================
+
+model Tenant {
+  id                      String    @id @default(uuid())
+  name                    String
+  slug                    String    @unique
+  ownerId                 String
+  tier                    String    @default("STARTER")
+  customDomain            String?   @unique
+  domainVerified          Boolean   @default(false)
+  domainVerificationToken String?
+  apiKey                  String?
+  apiKeyHash              String?
+  apiKeyRotatedAt         DateTime?
+  apiKeyLastUsedAt        DateTime?
+  branding                Json?     // Logo, colors, fonts
+  settings                Json?     // Features, limits
+  whiteLabelSettings      Json?
+  status                  String    @default("ACTIVE")
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  owner   User           @relation(fields: [ownerId], references: [id])
+  members TenantMember[]
+  roles   TenantRole[]
+
+  @@map("tenants")
+}
+
+model TenantMember {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String
+  role      String   @default("member")
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([tenantId, userId])
+  @@map("tenant_members")
+}
+
+model TenantRole {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  permissions String[]
+  description String?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, name])
+  @@map("tenant_roles")
+}
+
+// =============================================================================
+// WEBHOOKS
+// =============================================================================
+
+model Webhook {
+  id              String    @id @default(uuid())
+  businessId      String
+  url             String
+  events          String[]
+  description     String?
+  secret          String
+  secretRotatedAt DateTime?
+  isActive        Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  successCount    Int       @default(0)
+  failureCount    Int       @default(0)
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  business   Business          @relation(fields: [businessId], references: [id])
+  deliveries WebhookDelivery[]
+
+  @@index([businessId])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id              String    @id @default(uuid())
+  webhookId       String
+  eventId         String
+  eventType       String
+  payload         Json
+  status          String    @default("pending")
+  attempts        Int       @default(0)
+  responseStatus  Int?
+  responseHeaders Json?
+  responseBody    String?
+  error           String?
+  deliveredAt     DateTime?
+  nextRetryAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  webhook Webhook @relation(fields: [webhookId], references: [id])
+
+  @@index([webhookId])
+  @@index([status])
+  @@map("webhook_deliveries")
+}
+
+// =============================================================================
+// API MARKETPLACE
+// =============================================================================
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  businessId String
+  name       String
+  keyPrefix  String
+  keyHash    String    @unique
+  planId     String    @default("free")
+  scopes     String[]
+  rateLimit  Json?
+  status     String    @default("ACTIVE")
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  usageCount Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  business Business   @relation(fields: [businessId], references: [id])
+  usage    ApiUsage[]
+
+  @@index([businessId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+model ApiUsage {
+  id           String   @id @default(uuid())
+  apiKeyId     String
+  endpoint     String
+  method       String
+  statusCode   Int
+  responseTime Int?
+  ipAddress    String?
+  timestamp    DateTime @default(now())
+
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id])
+
+  @@index([apiKeyId])
+  @@index([timestamp])
+  @@map("api_usage")
+}
+
+// =============================================================================
+// LOCALIZATION
+// =============================================================================
+
+model Translation {
+  id           String   @id @default(uuid())
+  languageCode String
+  namespace    String
+  key          String
+  value        String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([languageCode, namespace, key])
+  @@map("translations")
+}
+
+model ProductTranslation {
+  id               String   @id @default(uuid())
+  productId        String
+  languageCode     String
+  name             String
+  description      String?
+  shortDescription String?
+  specifications   Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([productId, languageCode])
+  @@map("product_translations")
+}
+
+model CategoryTranslation {
+  id           String   @id @default(uuid())
+  categoryId   String
+  languageCode String
+  name         String
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([categoryId, languageCode])
+  @@map("category_translations")
+}
+
+// =============================================================================
+// TALLY INTEGRATION
+// =============================================================================
+
+model TallyIntegration {
+  id              String    @id @default(uuid())
+  businessId      String    @unique
+  serverUrl       String
+  companyName     String
+  credentials     String    // Encrypted
+  autoSync        Boolean   @default(false)
+  syncInterval    Int       @default(30) // minutes
+  status          String    @default("DISCONNECTED")
+  lastConnectedAt DateTime?
+  lastSyncAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id])
+  logs     TallySyncLog[]
+
+  @@map("tally_integrations")
+}
+
+model TallySyncLog {
+  id                 String   @id @default(uuid())
+  businessId         String
+  entityType         String
+  entityId           String
+  action             String
+  status             String
+  tallyVoucherNumber String?
+  response           Json?
+  createdAt          DateTime @default(now())
+
+  integration TallyIntegration @relation(fields: [businessId], references: [businessId])
+
+  @@index([businessId])
+  @@index([entityType, entityId])
+  @@map("tally_sync_logs")
+}
+
+// =============================================================================
+// BUSINESS INTELLIGENCE
+// =============================================================================
+
+model GeneratedReport {
+  id          String   @id @default(uuid())
+  reportId    String   @unique
+  type        String
+  businessId  String?
+  dateRange   Json?
+  data        Json
+  format      String   @default("json")
+  status      String   @default("COMPLETED")
+  generatedAt DateTime @default(now())
+
+  business Business? @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@index([type])
+  @@map("generated_reports")
+}
+
+
+

@@ -1,0 +1,1109 @@
+// =============================================================================
+// AIRAVAT B2B MARKETPLACE - SCHEMA V4 ADDITIONS
+// New models for Phase 1-4 features
+// =============================================================================
+
+// =============================================================================
+// PHASE 1: QUICK WINS
+// =============================================================================
+
+// Barcode Scanner
+model ScanHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  barcode   String
+  result    String   // PRODUCT_FOUND, NOT_FOUND, HSN_MATCH
+  productId String?
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([userId])
+  @@index([barcode])
+  @@map("scan_histories")
+}
+
+// Deep Links
+model DeepLink {
+  id        String    @id @default(uuid())
+  shortCode String    @unique
+  type      String    // PRODUCT, CATEGORY, BUSINESS, RFQ, etc.
+  targetId  String?
+  params    Json
+  appLink   String
+  webLink   String
+  campaign  String?
+  source    String?
+  clicks    Int       @default(0)
+  createdBy String?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  clickLogs DeepLinkClick[]
+
+  @@index([shortCode])
+  @@index([createdBy])
+  @@map("deep_links")
+}
+
+model DeepLinkClick {
+  id         String   @id @default(uuid())
+  deepLinkId String
+  ipAddress  String?
+  userAgent  String?
+  platform   String?
+  country    String?
+  referrer   String?
+  createdAt  DateTime @default(now())
+
+  deepLink DeepLink @relation(fields: [deepLinkId], references: [id])
+
+  @@index([deepLinkId])
+  @@map("deep_link_clicks")
+}
+
+// Verified Badges
+model BusinessBadge {
+  id               String    @id @default(uuid())
+  businessId       String
+  badgeType        String    // GST_VERIFIED, ISO_CERTIFIED, etc.
+  status           String    @default("ACTIVE") // ACTIVE, REVOKED, EXPIRED
+  verifiedBy       String?
+  verifiedAt       DateTime?
+  expiresAt        DateTime?
+  revokedBy        String?
+  revokedAt        DateTime?
+  revocationReason String?
+  metadata         Json?
+  documents        Json?
+  createdAt        DateTime  @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, badgeType])
+  @@index([businessId])
+  @@index([status])
+  @@map("business_badges")
+}
+
+model BadgeVerificationRequest {
+  id           String    @id @default(uuid())
+  businessId   String
+  badgeType    String
+  status       String    @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
+  documents    Json?
+  submittedAt  DateTime  @default(now())
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  reviewNotes  String?
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@index([status])
+  @@map("badge_verification_requests")
+}
+
+// Cookie Consent
+model CookieConsent {
+  id          String    @id @default(uuid())
+  consentId   String    @unique
+  userId      String?
+  sessionId   String?
+  version     String
+  preferences Json
+  ipAddress   String?
+  userAgent   String?
+  consentedAt DateTime  @default(now())
+  updatedAt   DateTime?
+  withdrawnAt DateTime?
+
+  changeLogs ConsentChangeLog[]
+
+  @@index([userId])
+  @@index([consentId])
+  @@map("cookie_consents")
+}
+
+model ConsentChangeLog {
+  id                  String   @id @default(uuid())
+  consentId           String
+  previousPreferences Json
+  newPreferences      Json
+  changedAt           DateTime @default(now())
+  ipAddress           String?
+  action              String?
+
+  consent CookieConsent @relation(fields: [consentId], references: [consentId])
+
+  @@index([consentId])
+  @@map("consent_change_logs")
+}
+
+// System Announcements
+model Announcement {
+  id             String    @id @default(uuid())
+  title          String
+  message        String
+  type           String    @default("INFO") // INFO, SUCCESS, WARNING, ERROR, MAINTENANCE, PROMOTION
+  targetAudience String    @default("ALL") // ALL, BUYERS, SELLERS, PREMIUM, etc.
+  startDate      DateTime
+  endDate        DateTime?
+  priority       Int       @default(0)
+  link           String?
+  linkText       String?
+  dismissible    Boolean   @default(true)
+  sticky         Boolean   @default(false)
+  status         String    @default("ACTIVE") // ACTIVE, INACTIVE, SCHEDULED, EXPIRED
+  createdBy      String
+  updatedBy      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime?
+
+  dismissals AnnouncementDismissal[]
+  views      AnnouncementView[]
+  clicks     AnnouncementClick[]
+
+  @@index([status])
+  @@index([startDate])
+  @@map("announcements")
+}
+
+model AnnouncementDismissal {
+  id             String   @id @default(uuid())
+  announcementId String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id])
+
+  @@unique([announcementId, userId])
+  @@map("announcement_dismissals")
+}
+
+model AnnouncementView {
+  id             String   @id @default(uuid())
+  announcementId String
+  userId         String?
+  viewedAt       DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id])
+
+  @@index([announcementId])
+  @@map("announcement_views")
+}
+
+model AnnouncementClick {
+  id             String   @id @default(uuid())
+  announcementId String
+  userId         String?
+  clickedAt      DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id])
+
+  @@index([announcementId])
+  @@map("announcement_clicks")
+}
+
+// Social Sharing
+model SocialShare {
+  id         String   @id @default(uuid())
+  entityType String   // product, business, rfq
+  entityId   String
+  platform   String   // FACEBOOK, TWITTER, etc.
+  userId     String?
+  source     String?
+  referrer   String?
+  sharedAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@map("social_shares")
+}
+
+model ShareTracking {
+  id         String   @id @default(uuid())
+  code       String   @unique
+  entityType String
+  entityId   String
+  userId     String?
+  source     String?
+  clicks     Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  referrals ShareReferral[]
+
+  @@index([code])
+  @@map("share_trackings")
+}
+
+model ShareReferral {
+  id         String   @id @default(uuid())
+  trackingId String
+  visitorIp  String?
+  userAgent  String?
+  referrer   String?
+  createdAt  DateTime @default(now())
+
+  tracking ShareTracking @relation(fields: [trackingId], references: [id])
+
+  @@index([trackingId])
+  @@map("share_referrals")
+}
+
+// Seller Stories
+model SellerStory {
+  id              String    @id @default(uuid())
+  businessId      String
+  title           String
+  slug            String    @unique
+  subtitle        String?
+  content         String
+  category        String    @default("SUCCESS")
+  coverImage      String?
+  images          Json?
+  videoUrl        String?
+  metrics         Json?     // Revenue growth, etc.
+  tags            String[]
+  status          String    @default("DRAFT") // DRAFT, PENDING, PUBLISHED, FEATURED, ARCHIVED
+  viewCount       Int       @default(0)
+  likeCount       Int       @default(0)
+  shareCount      Int       @default(0)
+  publishedAt     DateTime?
+  featuredAt      DateTime?
+  submittedAt     DateTime?
+  archivedAt      DateTime?
+  approvedBy      String?
+  featuredBy      String?
+  rejectedAt      DateTime?
+  rejectedBy      String?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  business Business    @relation(fields: [businessId], references: [id])
+  likes    StoryLike[]
+
+  @@index([businessId])
+  @@index([status])
+  @@index([slug])
+  @@map("seller_stories")
+}
+
+model StoryLike {
+  id        String   @id @default(uuid())
+  storyId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  story SellerStory @relation(fields: [storyId], references: [id])
+  user  User        @relation(fields: [userId], references: [id])
+
+  @@unique([storyId, userId])
+  @@map("story_likes")
+}
+
+// =============================================================================
+// PHASE 2: MEDIUM PRIORITY
+// =============================================================================
+
+// Blanket Orders
+model BlanketOrder {
+  id                String    @id @default(uuid())
+  orderNumber       String    @unique
+  buyerId           String
+  sellerId          String
+  productId         String
+  variantId         String?
+  totalQuantity     Int
+  releasedQuantity  Int       @default(0)
+  remainingQuantity Int
+  unitPrice         Decimal   @db.Decimal(15, 2)
+  currency          String    @default("INR")
+  totalValue        Decimal   @db.Decimal(15, 2)
+  startDate         DateTime
+  endDate           DateTime
+  originalEndDate   DateTime
+  releaseFrequency  String    // WEEKLY, MONTHLY, etc.
+  releaseSchedule   Json?
+  deliveryAddress   Json
+  terms             String?
+  notes             String?
+  status            String    @default("DRAFT")
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  approvalNotes     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  buyer    User                  @relation("BlanketOrderBuyer", fields: [buyerId], references: [id])
+  seller   Business              @relation(fields: [sellerId], references: [id])
+  product  Product               @relation(fields: [productId], references: [id])
+  variant  ProductVariant?       @relation(fields: [variantId], references: [id])
+  releases BlanketOrderRelease[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+  @@map("blanket_orders")
+}
+
+model BlanketOrderRelease {
+  id             String   @id @default(uuid())
+  blanketOrderId String
+  quantity       Int
+  unitPrice      Decimal  @db.Decimal(15, 2)
+  totalAmount    Decimal  @db.Decimal(15, 2)
+  scheduledDate  DateTime
+  status         String   @default("PENDING")
+  orderId        String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  blanketOrder BlanketOrder @relation(fields: [blanketOrderId], references: [id])
+  order        Order?       @relation(fields: [orderId], references: [id])
+
+  @@index([blanketOrderId])
+  @@map("blanket_order_releases")
+}
+
+// Purchase Requisitions
+model PurchaseRequisition {
+  id                 String    @id @default(uuid())
+  requisitionNumber  String    @unique
+  businessId         String
+  requesterId        String
+  title              String
+  description        String?
+  priority           String    @default("MEDIUM")
+  requiredBy         DateTime?
+  budgetCode         String?
+  costCenter         String?
+  department         String?
+  notes              String?
+  estimatedTotal     Decimal   @db.Decimal(15, 2)
+  currency           String    @default("INR")
+  status             String    @default("DRAFT")
+  submittedAt        DateTime?
+  approvedAt         DateTime?
+  approvedBy         String?
+  rejectedAt         DateTime?
+  rejectedBy         String?
+  rejectionReason    String?
+  convertedToOrderId String?
+  convertedAt        DateTime?
+  expiresAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  business  Business               @relation(fields: [businessId], references: [id])
+  requester User                   @relation("RequisitionRequester", fields: [requesterId], references: [id])
+  items     RequisitionItem[]
+  approvals RequisitionApproval[]
+
+  @@index([businessId])
+  @@index([requesterId])
+  @@index([status])
+  @@map("purchase_requisitions")
+}
+
+model RequisitionItem {
+  id              String  @id @default(uuid())
+  requisitionId   String
+  lineNumber      Int
+  description     String
+  productId       String?
+  quantity        Int
+  unit            String  @default("units")
+  estimatedPrice  Decimal @db.Decimal(15, 2)
+  lineTotal       Decimal @db.Decimal(15, 2)
+  specifications  Json?
+  preferredVendor String?
+  status          String  @default("PENDING")
+
+  requisition PurchaseRequisition @relation(fields: [requisitionId], references: [id])
+  product     Product?            @relation(fields: [productId], references: [id])
+
+  @@index([requisitionId])
+  @@map("requisition_items")
+}
+
+model RequisitionApproval {
+  id            String   @id @default(uuid())
+  requisitionId String
+  approverId    String
+  action        String   // APPROVED, REJECTED
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  requisition PurchaseRequisition @relation(fields: [requisitionId], references: [id])
+  approver    User                @relation(fields: [approverId], references: [id])
+
+  @@index([requisitionId])
+  @@map("requisition_approvals")
+}
+
+model ApprovalAuthority {
+  id               String   @id @default(uuid())
+  userId           String
+  businessId       String
+  maxApprovalLimit Decimal  @db.Decimal(15, 2)
+  categories       String[] // Categories they can approve
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([userId, businessId])
+  @@map("approval_authorities")
+}
+
+// Discussion Forum
+model ForumPost {
+  id                String    @id @default(uuid())
+  authorId          String
+  title             String
+  slug              String    @unique
+  content           String
+  category          String    @default("GENERAL")
+  tags              String[]
+  attachments       Json?
+  status            String    @default("PUBLISHED")
+  viewCount         Int       @default(0)
+  likeCount         Int       @default(0)
+  hasAcceptedAnswer Boolean   @default(false)
+  editedAt          DateTime?
+  deletedAt         DateTime?
+  lastActivityAt    DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  author  User              @relation(fields: [authorId], references: [id])
+  replies ForumReply[]
+  likes   ForumPostLike[]
+  poll    ForumPoll?
+
+  @@index([authorId])
+  @@index([category])
+  @@index([slug])
+  @@map("forum_posts")
+}
+
+model ForumReply {
+  id            String    @id @default(uuid())
+  postId        String
+  authorId      String
+  parentReplyId String?
+  content       String
+  attachments   Json?
+  isBestAnswer  Boolean   @default(false)
+  status        String    @default("ACTIVE")
+  editedAt      DateTime?
+  createdAt     DateTime  @default(now())
+
+  post     ForumPost      @relation(fields: [postId], references: [id])
+  author   User           @relation(fields: [authorId], references: [id])
+  parent   ForumReply?    @relation("ReplyToReply", fields: [parentReplyId], references: [id])
+  children ForumReply[]   @relation("ReplyToReply")
+  likes    ForumReplyLike[]
+
+  @@index([postId])
+  @@index([authorId])
+  @@map("forum_replies")
+}
+
+model ForumPostLike {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post ForumPost @relation(fields: [postId], references: [id])
+  user User      @relation(fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+  @@map("forum_post_likes")
+}
+
+model ForumReplyLike {
+  id        String   @id @default(uuid())
+  replyId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  reply ForumReply @relation(fields: [replyId], references: [id])
+  user  User       @relation(fields: [userId], references: [id])
+
+  @@unique([replyId, userId])
+  @@map("forum_reply_likes")
+}
+
+model ForumPoll {
+  id         String    @id @default(uuid())
+  postId     String    @unique
+  question   String
+  options    Json      // Array of {id, text, votes}
+  totalVotes Int       @default(0)
+  endsAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  post  ForumPost       @relation(fields: [postId], references: [id])
+  votes ForumPollVote[]
+
+  @@map("forum_polls")
+}
+
+model ForumPollVote {
+  id        String   @id @default(uuid())
+  pollId    String
+  userId    String
+  optionId  Int
+  createdAt DateTime @default(now())
+
+  poll ForumPoll @relation(fields: [pollId], references: [id])
+  user User      @relation(fields: [userId], references: [id])
+
+  @@unique([pollId, userId])
+  @@map("forum_poll_votes")
+}
+
+model ForumReport {
+  id         String   @id @default(uuid())
+  entityType String   // post, reply
+  entityId   String
+  reporterId String
+  reason     String
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+
+  reporter User @relation(fields: [reporterId], references: [id])
+
+  @@index([entityType, entityId])
+  @@map("forum_reports")
+}
+
+// Product Videos
+model ProductVideo {
+  id               String    @id @default(uuid())
+  productId        String
+  uploaderId       String
+  uploadId         String    @unique
+  title            String
+  description      String?
+  videoType        String    @default("PRODUCT_DEMO")
+  originalFilename String
+  fileSize         BigInt
+  mimeType         String
+  storagePath      String
+  thumbnails       Json?
+  variants         Json?     // Different quality versions
+  duration         Int?
+  resolution       String?
+  aspectRatio      String?
+  status           String    @default("PENDING")
+  viewCount        Int       @default(0)
+  isPrimary        Boolean   @default(false)
+  order            Int       @default(0)
+  metadata         Json?
+  processingError  String?
+  uploadedAt       DateTime?
+  processedAt      DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  product  Product     @relation(fields: [productId], references: [id])
+  uploader User        @relation(fields: [uploaderId], references: [id])
+  views    VideoView[]
+
+  @@index([productId])
+  @@index([status])
+  @@map("product_videos")
+}
+
+model VideoView {
+  id            String   @id @default(uuid())
+  videoId       String
+  userId        String?
+  watchDuration Int?
+  completed     Boolean  @default(false)
+  viewedAt      DateTime @default(now())
+
+  video ProductVideo @relation(fields: [videoId], references: [id])
+  user  User?        @relation(fields: [userId], references: [id])
+
+  @@index([videoId])
+  @@map("video_views")
+}
+
+// Digital Products
+model DigitalProduct {
+  id            String  @id @default(uuid())
+  productId     String  @unique
+  productType   String  @default("DOCUMENT")
+  licenseType   String  @default("SINGLE_USE")
+  downloadLimit Int     @default(5)
+  version       String  @default("1.0.0")
+  requirements  String?
+  changelog     String?
+
+  product  Product              @relation(fields: [productId], references: [id])
+  files    DigitalProductFile[]
+  licenses DigitalLicense[]
+
+  @@map("digital_products")
+}
+
+model DigitalProductFile {
+  id               String    @id @default(uuid())
+  digitalProductId String
+  fileId           String    @unique
+  filename         String
+  storagePath      String
+  fileSize         BigInt
+  mimeType         String
+  description      String?
+  isPreview        Boolean   @default(false)
+  version          String
+  status           String    @default("PENDING")
+  downloadCount    Int       @default(0)
+  uploadedAt       DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  digitalProduct DigitalProduct    @relation(fields: [digitalProductId], references: [id])
+  downloads      DigitalDownload[]
+
+  @@index([digitalProductId])
+  @@map("digital_product_files")
+}
+
+model DownloadToken {
+  id          String    @id @default(uuid())
+  token       String    @unique
+  fileId      String
+  orderItemId String
+  userId      String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([token])
+  @@map("download_tokens")
+}
+
+model DigitalDownload {
+  id          String   @id @default(uuid())
+  fileId      String
+  orderItemId String
+  userId      String
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  file DigitalProductFile @relation(fields: [fileId], references: [id])
+
+  @@index([fileId])
+  @@index([orderItemId])
+  @@map("digital_downloads")
+}
+
+model DigitalLicense {
+  id                 String    @id @default(uuid())
+  orderItemId        String
+  productId          String
+  buyerId            String
+  licenseKey         String    @unique
+  licenseType        String
+  isActive           Boolean   @default(true)
+  activatedAt        DateTime?
+  expiresAt          DateTime?
+  maxActivations     Int       @default(1)
+  currentActivations Int       @default(0)
+  createdAt          DateTime  @default(now())
+
+  product     Product             @relation(fields: [productId], references: [id])
+  buyer       User                @relation(fields: [buyerId], references: [id])
+  activations LicenseActivation[]
+
+  @@index([licenseKey])
+  @@index([buyerId])
+  @@map("digital_licenses")
+}
+
+model LicenseActivation {
+  id            String    @id @default(uuid())
+  licenseId     String
+  machineId     String
+  activatedAt   DateTime  @default(now())
+  deactivatedAt DateTime?
+  isActive      Boolean   @default(true)
+
+  license DigitalLicense @relation(fields: [licenseId], references: [id])
+
+  @@index([licenseId])
+  @@map("license_activations")
+}
+
+// Data Portability & Deletion
+model DataExportRequest {
+  id                 String    @id @default(uuid())
+  exportId           String    @unique
+  userId             String
+  categories         String[]
+  format             String    @default("json")
+  includeAttachments Boolean   @default(false)
+  status             String    @default("PENDING")
+  filePath           String?
+  fileSize           BigInt?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  downloadedAt       DateTime?
+  expiresAt          DateTime
+  error              String?
+  createdAt          DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([exportId])
+  @@map("data_export_requests")
+}
+
+model DeletionRequest {
+  id                    String    @id @default(uuid())
+  userId                String
+  reason                String?
+  feedback              String?
+  verificationToken     String?
+  verificationExpiry    DateTime?
+  verifiedAt            DateTime?
+  status                String    @default("PENDING_VERIFICATION")
+  scheduledDeletionDate DateTime
+  cancelledAt           DateTime?
+  completedAt           DateTime?
+  deletionLog           Json?
+  error                 String?
+  createdAt             DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("deletion_requests")
+}
+
+// =============================================================================
+// PHASE 3: HIGH IMPACT B2B
+// =============================================================================
+
+// Reverse Auctions
+model ReverseAuction {
+  id                    String    @id @default(uuid())
+  auctionNumber         String    @unique
+  buyerId               String
+  title                 String
+  description           String
+  categoryId            String?
+  specifications        Json?
+  quantity              Int
+  unit                  String    @default("units")
+  maxBudget             Decimal   @db.Decimal(15, 2)
+  currency              String    @default("INR")
+  currentLowestBid      Decimal?  @db.Decimal(15, 2)
+  startDate             DateTime
+  endDate               DateTime
+  originalEndDate       DateTime
+  extensionsUsed        Int       @default(0)
+  deliveryAddress       Json?
+  deliveryDeadline      DateTime?
+  awardMethod           String    @default("LOWEST_BID")
+  qualificationCriteria Json?
+  attachments           Json?
+  isPublic              Boolean   @default(true)
+  status                String    @default("DRAFT")
+  publishedAt           DateTime?
+  endedAt               DateTime?
+  winningBidId          String?
+  awardedAt             DateTime?
+  awardNotes            String?
+  cancellationReason    String?
+  cancelledAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  buyer       User                       @relation("ReverseAuctionBuyer", fields: [buyerId], references: [id])
+  category    Category?                  @relation(fields: [categoryId], references: [id])
+  bids        ReverseAuctionBid[]
+  invitations ReverseAuctionInvitation[]
+  winningBid  ReverseAuctionBid?         @relation("WinningBid", fields: [winningBidId], references: [id])
+
+  @@index([buyerId])
+  @@index([status])
+  @@index([categoryId])
+  @@map("reverse_auctions")
+}
+
+model ReverseAuctionBid {
+  id           String    @id @default(uuid())
+  auctionId    String
+  sellerId     String
+  amount       Decimal   @db.Decimal(15, 2)
+  notes        String?
+  deliveryDays Int?
+  warranty     String?
+  attachments  Json?
+  status       String    @default("ACTIVE") // ACTIVE, WITHDRAWN, AWARDED, REJECTED
+  withdrawnAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  auction    ReverseAuction   @relation(fields: [auctionId], references: [id])
+  seller     Business         @relation(fields: [sellerId], references: [id])
+  wonAuction ReverseAuction[] @relation("WinningBid")
+
+  @@index([auctionId])
+  @@index([sellerId])
+  @@map("reverse_auction_bids")
+}
+
+model ReverseAuctionInvitation {
+  id        String   @id @default(uuid())
+  auctionId String
+  sellerId  String
+  status    String   @default("PENDING") // PENDING, ACCEPTED, DECLINED
+  createdAt DateTime @default(now())
+
+  auction ReverseAuction @relation(fields: [auctionId], references: [id])
+  seller  Business       @relation(fields: [sellerId], references: [id])
+
+  @@unique([auctionId, sellerId])
+  @@map("reverse_auction_invitations")
+}
+
+// Disputes
+model Dispute {
+  id                 String    @id @default(uuid())
+  disputeNumber      String    @unique
+  orderId            String
+  raisedBy           String
+  againstUser        String
+  category           String
+  title              String
+  description        String
+  expectedResolution String?
+  claimAmount        Decimal?  @db.Decimal(15, 2)
+  sellerResponse     String?
+  proposedResolution String?
+  counterOfferAmount Decimal?  @db.Decimal(15, 2)
+  respondedAt        DateTime?
+  responseDeadline   DateTime?
+  status             String    @default("OPEN")
+  resolution         String?
+  resolutionAmount   Decimal?  @db.Decimal(15, 2)
+  resolutionNotes    String?
+  favoredParty       String?
+  resolvedAt         DateTime?
+  resolvedBy         String?
+  escalatedAt        DateTime?
+  escalationReason   String?
+  closedAt           DateTime?
+  assignedToId       String?
+  assignedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  order             Order              @relation(fields: [orderId], references: [id])
+  raisedByUser      User               @relation("DisputeRaisedBy", fields: [raisedBy], references: [id])
+  againstUserRecord User               @relation("DisputeAgainst", fields: [againstUser], references: [id])
+  assignedTo        User?              @relation("DisputeAssigned", fields: [assignedToId], references: [id])
+  evidence          DisputeEvidence[]
+  timeline          DisputeTimeline[]
+  messages          DisputeMessage[]
+
+  @@index([orderId])
+  @@index([raisedBy])
+  @@index([status])
+  @@map("disputes")
+}
+
+model DisputeEvidence {
+  id          String   @id @default(uuid())
+  disputeId   String
+  type        String   // IMAGE, DOCUMENT, VIDEO
+  url         String
+  description String?
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+
+  dispute Dispute @relation(fields: [disputeId], references: [id])
+
+  @@index([disputeId])
+  @@map("dispute_evidence")
+}
+
+model DisputeTimeline {
+  id          String   @id @default(uuid())
+  disputeId   String
+  action      String
+  performedBy String
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  dispute         Dispute @relation(fields: [disputeId], references: [id])
+  performedByUser User    @relation(fields: [performedBy], references: [id])
+
+  @@index([disputeId])
+  @@map("dispute_timeline")
+}
+
+model DisputeMessage {
+  id             String   @id @default(uuid())
+  disputeId      String
+  senderId       String
+  content        String
+  attachments    Json?
+  isAdminMessage Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  dispute Dispute @relation(fields: [disputeId], references: [id])
+  sender  User    @relation(fields: [senderId], references: [id])
+
+  @@index([disputeId])
+  @@map("dispute_messages")
+}
+
+// =============================================================================
+// PHASE 4: ADVANCED AI
+// =============================================================================
+
+// AI Chatbot
+model ChatSession {
+  id             String    @id @default(uuid())
+  userId         String?
+  status         String    @default("ACTIVE")
+  context        Json?
+  feedback       Int?
+  feedbackComment String?
+  lastActivityAt DateTime  @default(now())
+  endedAt        DateTime?
+  createdAt      DateTime  @default(now())
+
+  user     User?          @relation(fields: [userId], references: [id])
+  messages ChatMessage[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  sessionId String
+  role      String   // user, assistant
+  content   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+  @@map("chat_messages")
+}
+
+model SupportTicket {
+  id            String   @id @default(uuid())
+  userId        String?
+  chatSessionId String?
+  status        String   @default("PENDING")
+  priority      String   @default("NORMAL")
+  subject       String
+  assignedTo    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("support_tickets")
+}
+
+// Smart Pricing
+model PricingRule {
+  id                   String    @id @default(uuid())
+  businessId           String
+  name                 String
+  description          String?
+  type                 String    // DISCOUNT, MARKUP, DYNAMIC
+  conditions           Json?
+  adjustment           Json      // {type: 'PERCENTAGE'|'FIXED', value: number}
+  priority             Int       @default(0)
+  isActive             Boolean   @default(true)
+  validFrom            DateTime?
+  validUntil           DateTime?
+  applicableProducts   String[]
+  applicableCategories String[]
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@index([isActive])
+  @@map("pricing_rules")
+}
+
+model PricingRecommendation {
+  id               String   @id @default(uuid())
+  productId        String
+  currentPrice     Decimal  @db.Decimal(15, 2)
+  recommendedPrice Decimal  @db.Decimal(15, 2)
+  confidence       Float
+  factors          Json
+  strategy         String?
+  applied          Boolean  @default(false)
+  appliedAt        DateTime?
+  createdAt        DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@map("pricing_recommendations")
+}
+
+model PriceMonitoring {
+  id          String   @id @default(uuid())
+  productId   String
+  competitors Json     // Array of {url, name, platform}
+  isActive    Boolean  @default(true)
+  frequency   String   @default("DAILY")
+  lastChecked DateTime?
+  createdAt   DateTime @default(now())
+
+  product      Product        @relation(fields: [productId], references: [id])
+  priceHistory PriceHistory[]
+
+  @@index([productId])
+  @@map("price_monitorings")
+}
+
+model PriceHistory {
+  id           String   @id @default(uuid())
+  productId    String
+  monitoringId String?
+  price        Decimal  @db.Decimal(15, 2)
+  source       String?  // OWN, COMPETITOR
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  product    Product          @relation(fields: [productId], references: [id])
+  monitoring PriceMonitoring? @relation(fields: [monitoringId], references: [id])
+
+  @@index([productId])
+  @@index([createdAt])
+  @@map("price_histories")
+}
+
+
+

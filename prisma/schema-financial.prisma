@@ -1,0 +1,1068 @@
+// =============================================================================
+// AIRAVAT B2B MARKETPLACE - FINANCIAL SERVICES SCHEMA
+// Database models for advanced financial features
+// =============================================================================
+
+// =============================================================================
+// WALLET SYSTEM
+// =============================================================================
+
+model Wallet {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  businessId      String?
+  business        Business? @relation(fields: [businessId], references: [id])
+  
+  // Balance tracking
+  currency        String   @default("INR")
+  balance         Decimal  @default(0) @db.Decimal(15, 2)
+  lockedBalance   Decimal  @default(0) @db.Decimal(15, 2) // Held for pending transactions
+  
+  // Limits
+  dailyLimit      Decimal  @default(100000) @db.Decimal(15, 2)
+  monthlyLimit    Decimal  @default(1000000) @db.Decimal(15, 2)
+  
+  // Status
+  status          WalletStatus @default(ACTIVE)
+  kycVerified     Boolean  @default(false)
+  
+  // Security
+  pin             String?  // Hashed PIN
+  pinAttempts     Int      @default(0)
+  pinLockedUntil  DateTime?
+  
+  // Metadata
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  transactions    WalletTransaction[]
+  currencyBalances WalletCurrencyBalance[]
+  
+  @@unique([userId, currency])
+  @@index([businessId])
+  @@index([status])
+}
+
+enum WalletStatus {
+  ACTIVE
+  SUSPENDED
+  LOCKED
+  CLOSED
+}
+
+model WalletCurrencyBalance {
+  id          String   @id @default(cuid())
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id])
+  currency    String
+  balance     Decimal  @default(0) @db.Decimal(15, 2)
+  lockedBalance Decimal @default(0) @db.Decimal(15, 2)
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([walletId, currency])
+}
+
+model WalletTransaction {
+  id              String   @id @default(cuid())
+  walletId        String
+  wallet          Wallet   @relation(fields: [walletId], references: [id])
+  
+  // Transaction details
+  type            WalletTransactionType
+  amount          Decimal  @db.Decimal(15, 2)
+  currency        String   @default("INR")
+  balanceBefore   Decimal  @db.Decimal(15, 2)
+  balanceAfter    Decimal  @db.Decimal(15, 2)
+  
+  // Reference
+  referenceType   String?  // ORDER, REFUND, CASHBACK, TRANSFER, etc.
+  referenceId     String?
+  
+  // Counterparty
+  counterpartyWalletId String?
+  counterpartyName     String?
+  
+  // Status
+  status          TransactionStatus @default(COMPLETED)
+  
+  // Description
+  description     String?
+  metadata        Json?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  
+  @@index([walletId])
+  @@index([type])
+  @@index([referenceType, referenceId])
+  @@index([createdAt])
+}
+
+enum WalletTransactionType {
+  CREDIT
+  DEBIT
+  TRANSFER_IN
+  TRANSFER_OUT
+  CASHBACK
+  REFUND
+  WITHDRAWAL
+  DEPOSIT
+  HOLD
+  RELEASE
+  FEE
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+  CANCELLED
+}
+
+// =============================================================================
+// EMI / INSTALLMENTS
+// =============================================================================
+
+model EMIPlan {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  
+  // Plan configuration
+  tenureMonths    Int      // 3, 6, 9, 12, 18, 24
+  interestRate    Decimal  @db.Decimal(5, 2) // Annual interest rate
+  processingFee   Decimal  @default(0) @db.Decimal(5, 2) // Percentage
+  
+  // Eligibility
+  minAmount       Decimal  @db.Decimal(15, 2)
+  maxAmount       Decimal  @db.Decimal(15, 2)
+  
+  // Partner (bank/NBFC)
+  partnerId       String?
+  partnerName     String?
+  
+  // Status
+  isActive        Boolean  @default(true)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  emiOrders       EMIOrder[]
+  
+  @@index([tenureMonths])
+  @@index([isActive])
+}
+
+model EMIOrder {
+  id              String   @id @default(cuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id])
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  emiPlanId       String
+  emiPlan         EMIPlan  @relation(fields: [emiPlanId], references: [id])
+  
+  // EMI details
+  principalAmount Decimal  @db.Decimal(15, 2)
+  interestAmount  Decimal  @db.Decimal(15, 2)
+  processingFee   Decimal  @db.Decimal(15, 2)
+  totalAmount     Decimal  @db.Decimal(15, 2)
+  emiAmount       Decimal  @db.Decimal(15, 2) // Monthly EMI
+  
+  // Tenure
+  tenureMonths    Int
+  startDate       DateTime
+  endDate         DateTime
+  
+  // Payment tracking
+  paidInstallments Int     @default(0)
+  paidAmount      Decimal  @default(0) @db.Decimal(15, 2)
+  remainingAmount Decimal  @db.Decimal(15, 2)
+  
+  // Status
+  status          EMIStatus @default(ACTIVE)
+  
+  // Bank details
+  bankName        String?
+  accountLast4    String?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  installments    EMIInstallment[]
+  
+  @@index([userId])
+  @@index([orderId])
+  @@index([status])
+}
+
+enum EMIStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  COMPLETED
+  DEFAULTED
+  CANCELLED
+  FORECLOSED
+}
+
+model EMIInstallment {
+  id              String   @id @default(cuid())
+  emiOrderId      String
+  emiOrder        EMIOrder @relation(fields: [emiOrderId], references: [id])
+  
+  // Installment details
+  installmentNumber Int
+  dueDate         DateTime
+  amount          Decimal  @db.Decimal(15, 2)
+  principalComponent Decimal @db.Decimal(15, 2)
+  interestComponent Decimal @db.Decimal(15, 2)
+  
+  // Payment
+  paidDate        DateTime?
+  paidAmount      Decimal? @db.Decimal(15, 2)
+  lateFee         Decimal  @default(0) @db.Decimal(15, 2)
+  
+  // Status
+  status          InstallmentStatus @default(PENDING)
+  
+  // Payment reference
+  paymentId       String?
+  transactionRef  String?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([emiOrderId, installmentNumber])
+  @@index([dueDate])
+  @@index([status])
+}
+
+enum InstallmentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  PARTIALLY_PAID
+  WAIVED
+}
+
+// =============================================================================
+// INVOICE FACTORING
+// =============================================================================
+
+model FactoringApplication {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id])
+  
+  // Application details
+  applicationNumber String  @unique
+  
+  // Invoice details
+  invoiceId       String
+  invoiceNumber   String
+  invoiceAmount   Decimal  @db.Decimal(15, 2)
+  invoiceDate     DateTime
+  invoiceDueDate  DateTime
+  
+  // Buyer details
+  buyerBusinessId String
+  buyerName       String
+  
+  // Factoring terms
+  advanceRate     Decimal  @db.Decimal(5, 2) // % of invoice to advance (typically 80-90%)
+  discountRate    Decimal  @db.Decimal(5, 2) // Fee percentage
+  advanceAmount   Decimal  @db.Decimal(15, 2) // Amount to be advanced
+  feeAmount       Decimal  @db.Decimal(15, 2)
+  
+  // Recourse
+  isRecourse      Boolean  @default(true) // With or without recourse
+  
+  // Status
+  status          FactoringStatus @default(PENDING)
+  
+  // Approval
+  approvedAt      DateTime?
+  approvedBy      String?
+  rejectionReason String?
+  
+  // Disbursement
+  disbursedAt     DateTime?
+  disbursementRef String?
+  
+  // Settlement
+  settledAt       DateTime?
+  settlementAmount Decimal? @db.Decimal(15, 2)
+  
+  // Factor (financial institution)
+  factorId        String?
+  factorName      String?
+  
+  // Documents
+  documents       Json?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([businessId])
+  @@index([status])
+  @@index([invoiceId])
+}
+
+enum FactoringStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  DISBURSED
+  SETTLED
+  DEFAULTED
+  CANCELLED
+}
+
+// =============================================================================
+// TRADE FINANCE (Letter of Credit)
+// =============================================================================
+
+model LetterOfCredit {
+  id              String   @id @default(cuid())
+  lcNumber        String   @unique
+  
+  // Parties
+  applicantId     String   // Buyer
+  applicantBusiness Business @relation("LCApplicant", fields: [applicantId], references: [id])
+  beneficiaryId   String   // Seller
+  beneficiaryBusiness Business @relation("LCBeneficiary", fields: [beneficiaryId], references: [id])
+  
+  // Banks
+  issuingBank     String
+  issuingBankSwift String?
+  advisingBank    String?
+  advisingBankSwift String?
+  confirmingBank  String?
+  
+  // LC details
+  type            LCType
+  amount          Decimal  @db.Decimal(15, 2)
+  currency        String
+  tolerance       Decimal  @default(0) @db.Decimal(5, 2) // +/- percentage
+  
+  // Dates
+  issueDate       DateTime
+  expiryDate      DateTime
+  latestShipDate  DateTime?
+  
+  // Terms
+  paymentTerms    String   // At sight, Usance (30/60/90 days)
+  usanceDays      Int?
+  partialShipment Boolean  @default(false)
+  transhipment    Boolean  @default(false)
+  
+  // Goods description
+  goodsDescription String  @db.Text
+  
+  // Ports
+  portOfLoading   String?
+  portOfDischarge String?
+  placeOfDelivery String?
+  
+  // Documents required
+  requiredDocuments Json   // List of required documents
+  
+  // Status
+  status          LCStatus @default(DRAFT)
+  
+  // Amendments
+  amendmentCount  Int      @default(0)
+  
+  // Related order
+  orderId         String?
+  
+  // Metadata
+  metadata        Json?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  documents       LCDocument[]
+  amendments      LCAmendment[]
+  presentations   LCPresentation[]
+  
+  @@index([applicantId])
+  @@index([beneficiaryId])
+  @@index([status])
+  @@index([expiryDate])
+}
+
+enum LCType {
+  IRREVOCABLE
+  CONFIRMED
+  STANDBY
+  REVOLVING
+  TRANSFERABLE
+  BACK_TO_BACK
+}
+
+enum LCStatus {
+  DRAFT
+  SUBMITTED
+  ISSUED
+  ADVISED
+  CONFIRMED
+  AMENDED
+  PRESENTED
+  ACCEPTED
+  PAID
+  EXPIRED
+  CANCELLED
+}
+
+model LCDocument {
+  id              String   @id @default(cuid())
+  lcId            String
+  lc              LetterOfCredit @relation(fields: [lcId], references: [id])
+  
+  documentType    String   // Bill of Lading, Invoice, Packing List, etc.
+  documentNumber  String?
+  fileUrl         String
+  fileName        String
+  
+  // Verification
+  isVerified      Boolean  @default(false)
+  verifiedAt      DateTime?
+  verifiedBy      String?
+  discrepancies   String?
+  
+  uploadedAt      DateTime @default(now())
+  
+  @@index([lcId])
+}
+
+model LCAmendment {
+  id              String   @id @default(cuid())
+  lcId            String
+  lc              LetterOfCredit @relation(fields: [lcId], references: [id])
+  
+  amendmentNumber Int
+  description     String   @db.Text
+  changes         Json     // What was changed
+  
+  // Status
+  status          AmendmentStatus @default(PENDING)
+  
+  // Approval
+  requestedBy     String
+  requestedAt     DateTime @default(now())
+  approvedBy      String?
+  approvedAt      DateTime?
+  
+  // Fee
+  feeAmount       Decimal? @db.Decimal(15, 2)
+  
+  @@unique([lcId, amendmentNumber])
+}
+
+enum AmendmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model LCPresentation {
+  id              String   @id @default(cuid())
+  lcId            String
+  lc              LetterOfCredit @relation(fields: [lcId], references: [id])
+  
+  presentationNumber Int
+  presentationDate DateTime @default(now())
+  
+  // Documents presented
+  documents       Json
+  
+  // Examination
+  examinationResult String? // COMPLIANT, DISCREPANT
+  discrepancies   String?  @db.Text
+  
+  // Status
+  status          PresentationStatus @default(UNDER_EXAMINATION)
+  
+  // Payment
+  paymentDate     DateTime?
+  paymentAmount   Decimal? @db.Decimal(15, 2)
+  paymentRef      String?
+  
+  @@unique([lcId, presentationNumber])
+}
+
+enum PresentationStatus {
+  UNDER_EXAMINATION
+  COMPLIANT
+  DISCREPANT
+  ACCEPTED
+  PAID
+  REJECTED
+}
+
+// =============================================================================
+// VIRTUAL CARDS
+// =============================================================================
+
+model VirtualCard {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  businessId      String?
+  business        Business? @relation(fields: [businessId], references: [id])
+  
+  // Card details (tokenized)
+  cardToken       String   @unique // Reference to card provider
+  cardLast4       String
+  cardType        String   // VISA, MASTERCARD
+  expiryMonth     Int
+  expiryYear      Int
+  
+  // Card name
+  cardName        String?
+  cardholderName  String
+  
+  // Limits
+  cardLimit       Decimal  @db.Decimal(15, 2)
+  availableLimit  Decimal  @db.Decimal(15, 2)
+  singleTxnLimit  Decimal? @db.Decimal(15, 2)
+  dailyLimit      Decimal? @db.Decimal(15, 2)
+  
+  // Currency
+  currency        String   @default("INR")
+  
+  // Controls
+  isActive        Boolean  @default(true)
+  isLocked        Boolean  @default(false)
+  allowOnline     Boolean  @default(true)
+  allowInternational Boolean @default(false)
+  
+  // Restrictions
+  allowedCategories String[] // MCC codes
+  blockedMerchants  String[]
+  
+  // Validity
+  validFrom       DateTime @default(now())
+  validUntil      DateTime
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  transactions    VirtualCardTransaction[]
+  
+  @@index([userId])
+  @@index([businessId])
+  @@index([cardToken])
+}
+
+model VirtualCardTransaction {
+  id              String   @id @default(cuid())
+  cardId          String
+  card            VirtualCard @relation(fields: [cardId], references: [id])
+  
+  // Transaction details
+  amount          Decimal  @db.Decimal(15, 2)
+  currency        String
+  
+  // Merchant
+  merchantName    String
+  merchantCategory String?
+  merchantId      String?
+  
+  // Status
+  status          CardTransactionStatus @default(PENDING)
+  
+  // Authorization
+  authCode        String?
+  declineReason   String?
+  
+  // Reference
+  externalRef     String?
+  
+  // Timestamps
+  transactionDate DateTime @default(now())
+  settledAt       DateTime?
+  
+  @@index([cardId])
+  @@index([transactionDate])
+  @@index([status])
+}
+
+enum CardTransactionStatus {
+  PENDING
+  AUTHORIZED
+  SETTLED
+  DECLINED
+  REVERSED
+  REFUNDED
+}
+
+// =============================================================================
+// CASHBACK REWARDS
+// =============================================================================
+
+model CashbackProgram {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  
+  // Rules
+  type            CashbackType
+  value           Decimal  @db.Decimal(5, 2) // Percentage or fixed amount
+  maxCashback     Decimal? @db.Decimal(15, 2)
+  minPurchase     Decimal? @db.Decimal(15, 2)
+  
+  // Validity
+  startDate       DateTime
+  endDate         DateTime
+  
+  // Eligibility
+  applicableCategories String[]
+  applicableSellers    String[]
+  applicableProducts   String[]
+  userTiers           String[] // Bronze, Silver, Gold, etc.
+  
+  // Limits
+  maxUsagePerUser Int?
+  totalBudget     Decimal? @db.Decimal(15, 2)
+  usedBudget      Decimal  @default(0) @db.Decimal(15, 2)
+  
+  // Status
+  isActive        Boolean  @default(true)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  rewards         CashbackReward[]
+  
+  @@index([isActive])
+  @@index([startDate, endDate])
+}
+
+enum CashbackType {
+  PERCENTAGE
+  FIXED
+  TIERED
+}
+
+model CashbackReward {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  programId       String
+  program         CashbackProgram @relation(fields: [programId], references: [id])
+  
+  // Order reference
+  orderId         String
+  orderAmount     Decimal  @db.Decimal(15, 2)
+  
+  // Cashback details
+  cashbackAmount  Decimal  @db.Decimal(15, 2)
+  
+  // Status
+  status          CashbackStatus @default(PENDING)
+  
+  // Credit to wallet
+  walletId        String?
+  creditedAt      DateTime?
+  
+  // Expiry
+  expiresAt       DateTime?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  
+  @@index([userId])
+  @@index([orderId])
+  @@index([status])
+}
+
+enum CashbackStatus {
+  PENDING
+  APPROVED
+  CREDITED
+  EXPIRED
+  CANCELLED
+}
+
+// =============================================================================
+// BANK INTEGRATION
+// =============================================================================
+
+model BankConnection {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id])
+  
+  // Bank details
+  bankName        String
+  bankCode        String   // IFSC prefix or bank identifier
+  accountNumber   String   // Encrypted
+  accountType     String   // CURRENT, SAVINGS
+  
+  // Connection
+  connectionProvider String // Razorpay, Yodlee, Finbox, etc.
+  connectionId    String?  // Provider's connection ID
+  
+  // Status
+  status          BankConnectionStatus @default(PENDING)
+  lastSyncAt      DateTime?
+  syncError       String?
+  
+  // Consent
+  consentId       String?
+  consentExpiresAt DateTime?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  transactions    BankTransaction[]
+  
+  @@index([businessId])
+  @@index([status])
+}
+
+enum BankConnectionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  REVOKED
+  FAILED
+}
+
+model BankTransaction {
+  id              String   @id @default(cuid())
+  connectionId    String
+  connection      BankConnection @relation(fields: [connectionId], references: [id])
+  
+  // Transaction details
+  transactionId   String   // Bank's transaction ID
+  transactionDate DateTime
+  valueDate       DateTime?
+  
+  // Amount
+  amount          Decimal  @db.Decimal(15, 2)
+  type            BankTransactionType
+  
+  // Details
+  description     String?
+  reference       String?
+  
+  // Balance
+  runningBalance  Decimal? @db.Decimal(15, 2)
+  
+  // Counterparty
+  counterpartyName String?
+  counterpartyAccount String?
+  
+  // Categorization
+  category        String?
+  
+  // Reconciliation
+  isReconciled    Boolean  @default(false)
+  reconciledWith  String?  // Reference to matched invoice/payment
+  reconciledAt    DateTime?
+  
+  // Timestamps
+  importedAt      DateTime @default(now())
+  
+  @@unique([connectionId, transactionId])
+  @@index([transactionDate])
+  @@index([isReconciled])
+}
+
+enum BankTransactionType {
+  CREDIT
+  DEBIT
+}
+
+// =============================================================================
+// AUTOMATED RECONCILIATION
+// =============================================================================
+
+model ReconciliationRule {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id])
+  
+  name            String
+  description     String?
+  
+  // Matching criteria
+  matchType       ReconciliationMatchType
+  matchFields     Json     // Fields to match
+  tolerance       Decimal  @default(0) @db.Decimal(5, 2) // Amount tolerance %
+  dateTolerance   Int      @default(3) // Days tolerance
+  
+  // Priority
+  priority        Int      @default(10)
+  
+  // Status
+  isActive        Boolean  @default(true)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([businessId])
+}
+
+enum ReconciliationMatchType {
+  EXACT
+  FUZZY
+  REFERENCE
+  AMOUNT_DATE
+}
+
+model ReconciliationBatch {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id])
+  
+  // Batch details
+  batchNumber     String   @unique
+  startDate       DateTime
+  endDate         DateTime
+  
+  // Statistics
+  totalTransactions Int    @default(0)
+  matchedCount    Int      @default(0)
+  unmatchedCount  Int      @default(0)
+  manualCount     Int      @default(0)
+  
+  // Status
+  status          ReconciliationBatchStatus @default(IN_PROGRESS)
+  
+  // Timestamps
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  
+  // Relations
+  items           ReconciliationItem[]
+  
+  @@index([businessId])
+  @@index([status])
+}
+
+enum ReconciliationBatchStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model ReconciliationItem {
+  id              String   @id @default(cuid())
+  batchId         String
+  batch           ReconciliationBatch @relation(fields: [batchId], references: [id])
+  
+  // Bank transaction
+  bankTransactionId String
+  bankAmount      Decimal  @db.Decimal(15, 2)
+  bankDate        DateTime
+  bankDescription String?
+  
+  // Matched record
+  matchedType     String?  // INVOICE, PAYMENT, ORDER
+  matchedId       String?
+  matchedAmount   Decimal? @db.Decimal(15, 2)
+  
+  // Matching
+  matchScore      Decimal? @db.Decimal(5, 2)
+  matchMethod     String?  // AUTO, MANUAL
+  
+  // Status
+  status          ReconciliationItemStatus @default(PENDING)
+  
+  // Manual resolution
+  resolvedBy      String?
+  resolvedAt      DateTime?
+  notes           String?
+  
+  @@index([batchId])
+  @@index([status])
+}
+
+enum ReconciliationItemStatus {
+  PENDING
+  MATCHED
+  UNMATCHED
+  MANUALLY_MATCHED
+  EXCEPTION
+}
+
+// =============================================================================
+// CREDIT INSURANCE
+// =============================================================================
+
+model CreditInsurancePolicy {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id])
+  
+  // Policy details
+  policyNumber    String   @unique
+  insurerId       String
+  insurerName     String
+  
+  // Coverage
+  coverageType    CoverageType
+  coverageLimit   Decimal  @db.Decimal(15, 2)
+  usedCoverage    Decimal  @default(0) @db.Decimal(15, 2)
+  availableCoverage Decimal @db.Decimal(15, 2)
+  
+  // Premium
+  premiumRate     Decimal  @db.Decimal(5, 4) // Percentage
+  premiumAmount   Decimal  @db.Decimal(15, 2)
+  premiumPaid     Boolean  @default(false)
+  
+  // Validity
+  startDate       DateTime
+  endDate         DateTime
+  
+  // Deductible
+  deductiblePercent Decimal @default(0) @db.Decimal(5, 2)
+  
+  // Status
+  status          InsurancePolicyStatus @default(PENDING)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  coveredBuyers   InsuredBuyer[]
+  claims          InsuranceClaim[]
+  
+  @@index([businessId])
+  @@index([status])
+}
+
+enum CoverageType {
+  WHOLE_TURNOVER
+  SPECIFIC_BUYERS
+  SINGLE_BUYER
+  TOP_UP
+}
+
+enum InsurancePolicyStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  SUSPENDED
+}
+
+model InsuredBuyer {
+  id              String   @id @default(cuid())
+  policyId        String
+  policy          CreditInsurancePolicy @relation(fields: [policyId], references: [id])
+  
+  // Buyer details
+  buyerBusinessId String
+  buyerName       String
+  
+  // Credit limit for this buyer
+  creditLimit     Decimal  @db.Decimal(15, 2)
+  usedLimit       Decimal  @default(0) @db.Decimal(15, 2)
+  
+  // Risk assessment
+  riskGrade       String?  // A, B, C, D
+  
+  // Status
+  isActive        Boolean  @default(true)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([policyId, buyerBusinessId])
+}
+
+model InsuranceClaim {
+  id              String   @id @default(cuid())
+  policyId        String
+  policy          CreditInsurancePolicy @relation(fields: [policyId], references: [id])
+  
+  // Claim details
+  claimNumber     String   @unique
+  claimDate       DateTime @default(now())
+  
+  // Default details
+  buyerBusinessId String
+  buyerName       String
+  invoiceId       String
+  invoiceNumber   String
+  invoiceAmount   Decimal  @db.Decimal(15, 2)
+  invoiceDueDate  DateTime
+  
+  // Claim amount
+  claimAmount     Decimal  @db.Decimal(15, 2)
+  deductibleAmount Decimal @db.Decimal(15, 2)
+  payableAmount   Decimal  @db.Decimal(15, 2)
+  
+  // Status
+  status          ClaimStatus @default(SUBMITTED)
+  
+  // Processing
+  submittedAt     DateTime @default(now())
+  reviewedAt      DateTime?
+  approvedAt      DateTime?
+  rejectionReason String?
+  
+  // Settlement
+  settledAt       DateTime?
+  settlementAmount Decimal? @db.Decimal(15, 2)
+  settlementRef   String?
+  
+  // Documents
+  documents       Json?
+  
+  @@index([policyId])
+  @@index([status])
+}
+
+enum ClaimStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SETTLED
+  CLOSED
+}
+
+// =============================================================================
+// SECURE STORAGE
+// Encrypted key-value storage for sensitive data
+// =============================================================================
+
+model SecureStorage {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text // Encrypted value
+  metadata  Json?    // Additional metadata
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime?
+  
+  @@index([key])
+}

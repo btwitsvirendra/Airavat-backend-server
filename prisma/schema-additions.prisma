@@ -1,0 +1,378 @@
+// =============================================================================
+// AIRAVAT B2B MARKETPLACE - ADDITIONAL PRISMA MODELS
+// Add these models to your existing schema.prisma file
+// =============================================================================
+
+// Copy and add these models to your prisma/schema.prisma file
+
+/*
+
+// =============================================================================
+// AUDIT & LOGGING
+// =============================================================================
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  event        String
+  userId       String?
+  businessId   String?
+  resourceType String?
+  resourceId   String?
+  action       String?
+  oldValue     Json?
+  newValue     Json?
+  ip           String?
+  userAgent    String?
+  metadata     Json?
+  timestamp    DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([event])
+  @@index([userId])
+  @@index([resourceType, resourceId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+model WebhookLog {
+  id         String   @id @default(uuid())
+  source     String   // razorpay, shiprocket, etc.
+  event      String
+  payload    Json
+  headers    Json?
+  processed  Boolean  @default(false)
+  error      String?
+  receivedAt DateTime @default(now())
+
+  @@index([source])
+  @@index([event])
+  @@index([receivedAt])
+  @@map("webhook_logs")
+}
+
+// =============================================================================
+// FEATURE FLAGS
+// =============================================================================
+
+model FeatureFlag {
+  id                String   @id @default(uuid())
+  name              String   @unique
+  enabled           Boolean  @default(true)
+  rolloutPercentage Int      @default(100)
+  regions           String[] @default([])
+  allowlist         String[] @default([])
+  blocklist         String[] @default([])
+  requiredTier      String?
+  startDate         DateTime?
+  endDate           DateTime?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("feature_flags")
+}
+
+model ExperimentConversion {
+  id             String   @id @default(uuid())
+  experimentName String
+  variant        String
+  userId         String?
+  businessId     String?
+  conversionType String   @default("default")
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([experimentName, variant])
+  @@map("experiment_conversions")
+}
+
+model ExperimentImpression {
+  id             String   @id @default(uuid())
+  experimentName String
+  variant        String
+  userId         String?
+  sessionId      String?
+  createdAt      DateTime @default(now())
+
+  @@index([experimentName, variant])
+  @@map("experiment_impressions")
+}
+
+// =============================================================================
+// OUTBOUND WEBHOOKS
+// =============================================================================
+
+model WebhookEndpoint {
+  id              String   @id @default(uuid())
+  businessId      String
+  url             String
+  events          String[]
+  secret          String
+  description     String?
+  isActive        Boolean  @default(true)
+  lastTriggeredAt DateTime?
+  failureCount    Int      @default(0)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business   Business          @relation(fields: [businessId], references: [id])
+  deliveries WebhookDelivery[]
+
+  @@index([businessId])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id              String   @id @default(uuid())
+  webhookId       String
+  deliveryId      String   @unique
+  event           String
+  success         Boolean
+  statusCode      Int?
+  responseTime    Int?
+  error           String?
+  requestHeaders  Json?
+  requestBody     Json?
+  responseHeaders Json?
+  responseBody    String?
+  createdAt       DateTime @default(now())
+
+  webhook WebhookEndpoint @relation(fields: [webhookId], references: [id])
+
+  @@index([webhookId])
+  @@index([deliveryId])
+  @@map("webhook_deliveries")
+}
+
+// =============================================================================
+// REPORTS & ANALYTICS
+// =============================================================================
+
+model DailyReport {
+  id            String   @id @default(uuid())
+  date          DateTime @unique
+  orderCount    Int      @default(0)
+  revenue       Decimal  @default(0) @db.Decimal(15, 2)
+  newUsers      Int      @default(0)
+  newBusinesses Int      @default(0)
+  newProducts   Int      @default(0)
+  activeUsers   Int      @default(0)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([date])
+  @@map("daily_reports")
+}
+
+model AnalyticsSummary {
+  id         String   @id @default(uuid())
+  period     String   // hourly, daily, weekly, monthly
+  periodKey  String   // e.g., "2024-01-15", "2024-W03", "2024-01"
+  metricName String
+  metricValue Decimal @db.Decimal(15, 4)
+  dimensions Json?
+  createdAt  DateTime @default(now())
+
+  @@unique([period, periodKey, metricName])
+  @@index([period, periodKey])
+  @@map("analytics_summaries")
+}
+
+// =============================================================================
+// NOTIFICATION QUEUE
+// =============================================================================
+
+model NotificationQueue {
+  id          String   @id @default(uuid())
+  userId      String?
+  businessId  String?
+  channel     String   // email, sms, push, in-app
+  type        String   // order_confirmation, low_stock, etc.
+  recipient   String   // email address, phone number, etc.
+  subject     String?
+  content     Json
+  status      String   @default("PENDING") // PENDING, SENT, FAILED
+  scheduledAt DateTime @default(now())
+  sentAt      DateTime?
+  errorMessage String?
+  retryCount  Int      @default(0)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([userId])
+  @@map("notification_queue")
+}
+
+// =============================================================================
+// API KEYS
+// =============================================================================
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  businessId  String
+  name        String
+  keyHash     String   @unique
+  keyPrefix   String   // First 8 chars for identification
+  permissions String[] @default(["read"])
+  rateLimit   Int      @default(1000) // requests per hour
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+// =============================================================================
+// SAVED SEARCHES & ALERTS
+// =============================================================================
+
+model SavedSearch {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  searchQuery Json     // Stores all search parameters
+  alertEnabled Boolean @default(false)
+  alertFrequency String? // daily, weekly, instant
+  lastAlertAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("saved_searches")
+}
+
+// =============================================================================
+// PRICE ALERTS
+// =============================================================================
+
+model PriceAlert {
+  id          String   @id @default(uuid())
+  userId      String
+  productId   String
+  variantId   String?
+  targetPrice Decimal  @db.Decimal(15, 2)
+  condition   String   @default("below") // below, above
+  isActive    Boolean  @default(true)
+  triggeredAt DateTime?
+  createdAt   DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([userId])
+  @@index([productId])
+  @@index([isActive, targetPrice])
+  @@map("price_alerts")
+}
+
+// =============================================================================
+// BUSINESS RELATIONSHIPS
+// =============================================================================
+
+model BusinessRelationship {
+  id             String   @id @default(uuid())
+  buyerId        String
+  sellerId       String
+  status         String   @default("PENDING") // PENDING, APPROVED, BLOCKED
+  creditLimit    Decimal? @db.Decimal(15, 2)
+  paymentTerms   Int?     // Net days
+  discountRate   Decimal? @db.Decimal(5, 2)
+  notes          String?
+  approvedAt     DateTime?
+  approvedBy     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  buyer  Business @relation("BuyerRelationships", fields: [buyerId], references: [id])
+  seller Business @relation("SellerRelationships", fields: [sellerId], references: [id])
+
+  @@unique([buyerId, sellerId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@map("business_relationships")
+}
+
+// =============================================================================
+// IMPORT/EXPORT JOBS
+// =============================================================================
+
+model ImportJob {
+  id           String   @id @default(uuid())
+  businessId   String
+  type         String   // products, inventory, orders
+  status       String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  fileName     String
+  fileUrl      String
+  totalRows    Int?
+  processedRows Int     @default(0)
+  successRows  Int      @default(0)
+  failedRows   Int      @default(0)
+  errors       Json?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@index([status])
+  @@map("import_jobs")
+}
+
+model ExportJob {
+  id          String   @id @default(uuid())
+  businessId  String
+  type        String   // products, orders, inventory, customers
+  status      String   @default("PENDING")
+  filters     Json?
+  fileUrl     String?
+  expiresAt   DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@index([status])
+  @@map("export_jobs")
+}
+
+// =============================================================================
+// ADDITIONAL INDEXES FOR EXISTING MODELS
+// =============================================================================
+
+// Add these indexes to your existing models for better query performance:
+
+// For Product model:
+// @@index([status, createdAt])
+// @@index([businessId, status])
+// @@index([categoryId, status])
+// @@index([organicScore])
+
+// For Order model:
+// @@index([buyerId, status])
+// @@index([sellerId, status])
+// @@index([createdAt])
+// @@index([paymentStatus])
+
+// For User model:
+// @@index([status])
+// @@index([role])
+
+// For Business model:
+// @@index([verificationStatus])
+// @@index([country])
+
+*/
