@@ -1,0 +1,58 @@
+// =============================================================================
+// AIRAVAT B2B MARKETPLACE - UAE COMPLIANCE SCHEMA (V7)
+// =============================================================================
+
+model UAETradeLicense {
+  id                String    @id @default(cuid())
+  businessId        String    @unique
+  
+  // License Details
+  licenseNumber     String    @unique
+  legalName         String
+  tradeName         String
+  licenseType       String    // Commercial, Industrial, Professional
+  issuingAuthority  String    // DED, JAFZA, HFZA, etc.
+  
+  // Dates
+  issueDate         DateTime
+  expiryDate        DateTime
+  
+  // Status
+  status            String    @default("PENDING") // ACTIVE, EXPIRED, CANCELLED
+  isVerified        Boolean   @default(false)
+  verifiedAt        DateTime?
+  
+  // Document
+  documentUrl       String
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  business          Business  @relation("BusinessLicense", fields: [businessId], references: [id])
+
+  @@index([licenseNumber])
+  @@index([status])
+  @@map("uae_trade_licenses")
+}
+
+model UAEVatRegistration {
+  id                String    @id @default(cuid())
+  businessId        String    @unique
+  
+  // VAT Details
+  trn               String    @unique // Tax Registration Number
+  legalName         String
+  registrationDate  DateTime
+  
+  // Status
+  status            String    @default("ACTIVE")
+  isVerified        Boolean   @default(false)
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  business          Business  @relation("BusinessVat", fields: [businessId], references: [id])
+
+  @@index([trn])
+  @@map("uae_vat_registrations")
+}

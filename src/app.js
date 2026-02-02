@@ -47,6 +47,7 @@ const uploadRoutes = require('./routes/upload.routes');
 const metricsRoutes = require('./routes/metrics.routes');
 const bookingRoutes = require('./routes/booking.routes');
 const logisticsRoutes = require('./routes/logistics.routes');
+const uaeComplianceRoutes = require('./routes/uae.compliance.routes');
 
 // V2 Feature Routes - Enhanced B2B Trading
 const wishlistRoutes = require('./routes/wishlist.routes');
@@ -266,6 +267,7 @@ apiRouter.use('/upload', uploadRoutes);
 apiRouter.use('/metrics', metricsRoutes);
 apiRouter.use('/bookings', bookingRoutes);
 apiRouter.use('/logistics', logisticsRoutes);
+apiRouter.use('/uae/compliance', uaeComplianceRoutes);
 
 // V2 Feature Routes - Enhanced B2B Trading
 apiRouter.use('/wishlists', wishlistRoutes);

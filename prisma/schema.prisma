@@ -391,7 +391,7 @@ model Business {
   @@index([businessType])
   @@index([city, state])
   @@index([trustScore])
-  @@fulltext([businessName, description])
+  // @@fulltext([businessName, description])
   @@map("businesses")
 }
 
@@ -678,7 +678,7 @@ model Product {
   @@index([organicScore])
   @@index([createdAt])
   @@index([tags])
-  @@fulltext([name, description, brand, manufacturer])
+  // @@fulltext([name, description, brand, manufacturer])
   @@map("products")
 }
 
