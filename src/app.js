@@ -45,6 +45,7 @@ const adminRoutes = require('./routes/admin.routes');
 const webhookRoutes = require('./routes/webhook.routes');
 const uploadRoutes = require('./routes/upload.routes');
 const metricsRoutes = require('./routes/metrics.routes');
+const bookingRoutes = require('./routes/booking.routes');
 
 // V2 Feature Routes - Enhanced B2B Trading
 const wishlistRoutes = require('./routes/wishlist.routes');
@@ -262,6 +263,7 @@ apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/webhooks', webhookRoutes);
 apiRouter.use('/upload', uploadRoutes);
 apiRouter.use('/metrics', metricsRoutes);
+apiRouter.use('/bookings', bookingRoutes);
 
 // V2 Feature Routes - Enhanced B2B Trading
 apiRouter.use('/wishlists', wishlistRoutes);

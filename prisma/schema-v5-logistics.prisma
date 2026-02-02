@@ -1,0 +1,55 @@
+// =============================================================================
+// AIRAVAT B2B MARKETPLACE - LOGISTICS & BOOKING SCHEMA (V5)
+// =============================================================================
+
+model WarehouseReservation {
+  id              String    @id @default(cuid())
+  businessId      String    // Buyer Business
+  warehouseId     String
+  
+  // Booking Details
+  reservationNo   String    @unique // WHR-2024-XXXX
+  startDate       DateTime
+  endDate         DateTime
+  
+  // Space details
+  spaceType       String    @default("CBM") // CBM, SQFT, PALLET_SLOT
+  quantity        Decimal   @db.Decimal(10, 2)
+  
+  // Pricing
+  pricePerUnit    Decimal   @db.Decimal(15, 2)
+  totalPrice      Decimal   @db.Decimal(15, 2)
+  currency        String    @default("AED")
+  
+  // Status
+  status          ReservationStatus @default(PENDING)
+  
+  // Payment linking
+  paymentId       String?
+  paymentStatus   String    @default("UNPAID")
+  
+  // Metadata
+  notes           String?   @db.Text
+  metadata        Json?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  business        Business  @relation("BusinessReservations", fields: [businessId], references: [id])
+  warehouse       Warehouse @relation("WarehouseReservations", fields: [warehouseId], references: [id])
+
+  @@index([businessId])
+  @@index([warehouseId])
+  @@index([status])
+  @@map("warehouse_reservations")
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
