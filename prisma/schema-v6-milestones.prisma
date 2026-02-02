@@ -1,0 +1,48 @@
+// =============================================================================
+// AIRAVAT B2B MARKETPLACE - MILESTONE ESCROW SCHEMA (V6)
+// =============================================================================
+
+model PaymentMilestone {
+  id              String    @id @default(cuid())
+  orderId         String
+  
+  // Milestone Details
+  title           String    // e.g., "Advance Payment", "On Dispatch", "On Delivery"
+  description     String?
+  percentage      Decimal   @db.Decimal(5, 2) // % of total order amount
+  amount          Decimal   @db.Decimal(15, 2)
+  
+  // Fulfillment logic
+  triggerType     String    @default("MANUAL") // MANUAL, SHIPMENT_PICKED, SHIPMENT_DELIVERED
+  
+  // Status
+  status          MilestoneStatus @default(PENDING)
+  
+  // Payment tracking
+  paymentId       String?   // Linked to Payment model
+  paidAt          DateTime?
+  
+  // Verification (Proof of Delivery / Dispatch)
+  evidenceUrl     String?
+  verifiedAt      DateTime?
+  verifiedBy      String?
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  order           Order     @relation("OrderMilestones", fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([status])
+  @@map("payment_milestones")
+}
+
+enum MilestoneStatus {
+  PENDING
+  PAID
+  RELEASED
+  CANCELLED
+  DISPUTED
+}
